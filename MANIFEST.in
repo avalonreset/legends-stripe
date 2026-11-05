@@ -1,5 +1,5 @@
 include LICENSE README.md AGENTS.md SECURITY.md CHANGELOG.md THIRD_PARTY_NOTICES.md CONTRIBUTING.md
-include NOTICE CITATION.cff SUPPORT.md CODE_OF_CONDUCT.md
+include NOTICE.md CITATION.cff SUPPORT.md CODE_OF_CONDUCT.md
 recursive-include wiki *.md
 recursive-include references *.md
 recursive-include templates *.md

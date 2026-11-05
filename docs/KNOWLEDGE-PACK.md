@@ -8,7 +8,7 @@
 - Schema: `legends.knowledge-pack/v1`
 - Id: `stripe`
 - Module: `legends-stripe`
-- Version: `0.1.0`
+- Version: `0.1.1`
 - Entrypoint: `index.md`
 - Suggested home: `wiki/library/legends-stripe/stripe`
 - Ontology kind: `library`

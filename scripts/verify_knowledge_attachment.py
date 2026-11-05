@@ -13,9 +13,10 @@ import tempfile
 
 
 def main() -> int:
+    default_pack = Path(__file__).resolve().parents[1] / "knowledge" / "stripe" / "pack.json"
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--empire-source", type=Path, required=True)
-    parser.add_argument("--pack", type=Path, required=True)
+    parser.add_argument("--empire-source", "--empire-repo", dest="empire_source", type=Path, required=True)
+    parser.add_argument("--pack", type=Path, default=default_pack)
     args = parser.parse_args()
     sys.path.insert(0, str(args.empire_source.resolve()))
     from claude_empire import __version__ as empire_version

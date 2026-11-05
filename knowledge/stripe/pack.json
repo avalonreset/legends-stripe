@@ -2,7 +2,7 @@
   "schema": "legends.knowledge-pack/v1",
   "id": "stripe",
   "module": "legends-stripe",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "entrypoint": "index.md",
   "files": [
     {

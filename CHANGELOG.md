@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 (2026-11-05)
+
+- Aligned `README.md` command tables and examples with CLI subcommand names (`subscription-radar`, `checkout-canary`, `webhook-upsert`, `verify-webhook --payload @event.json --signature`, and `--apply --confirm-plan <plan_hash> --live`).
+- Fixed `MANIFEST.in` source distribution inclusion rule (`include NOTICE.md`).
+- Bumped package and attachable knowledge pack version to `0.1.1`.
+
 ## 0.1.0 (2026-11-05)
 
 - Initial release of `legends-stripe` CLI, attachable `legends.knowledge-pack/v1` Stripe reference vault (`knowledge/stripe/pack.json`), and drop-in server blueprints (`astro-checkout`, `astro-webhook`, `astro-portal`, `python-webhook`).
