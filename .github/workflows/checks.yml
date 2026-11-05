@@ -70,7 +70,7 @@ jobs:
         with:
           persist-credentials: false
           repository: avalonreset/legends-empire
-          ref: 8a74f3e0b0df498c074a2b3461be43ba69ab4fd2
+          ref: 49ea828ce5211cb987f690cd040b6a2b48836a98
           path: .integration/empire
       - name: Attach packaged knowledge on the native OS
         shell: bash

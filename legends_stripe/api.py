@@ -101,11 +101,16 @@ def validate_public_https_host(hostname: str, *, resolve_dns: bool = True) -> st
     return host
 
 
+_MACOS_SYSTEM_SYMLINKS = {Path("/var"), Path("/tmp"), Path("/etc")}
+
+
 def _reject_symlink_chain(path: Path) -> None:
-    """Refuse symlinks on the target path or any existing parent directory (CWE-59)."""
+    """Refuse symlinks on the target path or any non-system parent directory (CWE-59)."""
     if path.is_symlink():
         raise StripeError(f"Refusing to operate on symlink path: {path}")
     for parent in path.parents:
+        if parent in _MACOS_SYSTEM_SYMLINKS:
+            continue
         if parent.is_symlink():
             raise StripeError(f"Refusing to traverse symlinked directory: {parent}")
 
