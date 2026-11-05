@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "legends-stripe"
 version = "0.1.0"
-description = "Stripe payments, catalog lint, declarative test/live price ladder sync, preview-first mutations, subscription dunning and duplicate-billing radar, Stripe Drag treasury reconciliation, webhook HMAC verification, and Astro/Node/Python blueprints."
+description = "Stripe CLI, Stripe Checkout, Stripe Billing, webhook signature verification, declarative catalog sync, Stripe fee calculator telemetry, and Astro/Python blueprints."
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{name = "Benjamin Samar / cto-legends"}]
@@ -13,14 +13,15 @@ dependencies = []
 readme = "README.md"
 keywords = [
   "stripe",
-  "stripe-api",
   "stripe-cli",
-  "stripe-webhooks",
   "stripe-checkout",
-  "billing",
-  "subscriptions",
-  "payments",
-  "astro",
+  "stripe-billing",
+  "stripe-webhook",
+  "stripe-fee-calculator",
+  "stripe-customer-portal",
+  "stripe-python",
+  "stripe-price-id",
+  "astro-stripe",
   "cto-legends",
 ]
 classifiers = [
@@ -34,8 +35,10 @@ classifiers = [
 legends-stripe = "legends_stripe.cli:main"
 
 [project.urls]
+Homepage = "https://cto-legends.com"
 Repository = "https://github.com/avalonreset/legends-stripe"
 Issues = "https://github.com/avalonreset/legends-stripe/issues"
+Changelog = "https://github.com/avalonreset/legends-stripe/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 include = ["legends_stripe*"]

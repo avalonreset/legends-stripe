@@ -1,0 +1,19 @@
+name: Feature request
+description: Propose a new Stripe diagnostic, governance check, or server blueprint
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or operational failure mode
+      description: Which Stripe workflow or failure mode does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed CLI or Python behavior
+      description: Describe the preview/execute contract and expected output.
+    validations:
+      required: true

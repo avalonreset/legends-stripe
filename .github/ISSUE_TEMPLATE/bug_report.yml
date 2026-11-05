@@ -1,0 +1,29 @@
+name: Bug report
+description: Report a reproducible bug in legends-stripe
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include `sk_live_`, `sk_test_`, `rk_`, or `whsec_` secrets, customer emails, or private account identifiers.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Clear description of the bug and the command or function called.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal command or code snippet that reproduces the behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Sanitized `legends-stripe doctor --json` and OS / Python version
+    validations:
+      required: true
