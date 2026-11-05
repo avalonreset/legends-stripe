@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+title: "legends-stripe"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: "Samar"
+    given-names: "Benjamin"
+version: 0.1.0
+date-released: "2026-11-05"
+license: MIT
+repository-code: "https://github.com/avalonreset/legends-stripe"

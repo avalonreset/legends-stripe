@@ -1,0 +1,62 @@
+{
+  "id": "legends-stripe",
+  "name": "Legends Stripe",
+  "repo": "avalonreset/legends-stripe",
+  "version": "0.1.0",
+  "summary": "Operate Stripe payment infrastructure, catalog governance, price ladders, .env price auditing, treasury telemetry, and webhook fortification.",
+  "domains": [
+    "payments",
+    "billing",
+    "stripe",
+    "treasury",
+    "webhooks",
+    "ecommerce"
+  ],
+  "outcomes": [
+    "Audit Stripe Products, Prices, and .env price_1.../prod_... variables across Test Mode and Live Mode",
+    "Reconcile Stripe account balance, Gross Revenue, Stripe Drag fees, and Net Retained Cash to the cent",
+    "Generate and sync idempotent Stripe price ladders and product catalogs with preview-first SHA-256 plan hashes",
+    "Audit and fortify Stripe webhook endpoints for the 5-event Soft-Land Subscription Lifecycle and raw-body HMAC-SHA256 verification",
+    "Verify disposable zero-charge Checkout Session canaries, subscription MRR, dunning queues, double-billed customers, and custom payment domains"
+  ],
+  "examples": [
+    "Audit my .env file against Stripe and tell me if any price IDs or keys are mismatched",
+    "Reconcile our Stripe balance, gross revenue, and Stripe fee drag",
+    "Check our Stripe products and prices for orphaned prices or description length issues",
+    "Verify our Stripe webhook endpoint and test Stripe-Signature HMAC verification",
+    "Scan Stripe subscriptions for MRR, past-due dunning, and double-billed customers"
+  ],
+  "exclusions": [
+    "Do not use for raw credit card PAN handling or PCI-DSS cardholder data storage",
+    "Do not execute live-mode catalog or webhook mutations without explicit user confirmation of the preview plan hash"
+  ],
+  "install": {
+    "strategy": "python_venv_wheel_or_editable",
+    "requires_python": ">=3.11",
+    "entrypoints": [
+      "legends-stripe"
+    ]
+  },
+  "recipe": "docs/AGENT-RECIPE.md",
+  "knowledge_pack": "knowledge/stripe/pack.json",
+  "readiness_probes": [
+    {
+      "name": "doctor",
+      "command": [
+        "legends-stripe",
+        "doctor",
+        "--json"
+      ],
+      "paid_calls": false
+    },
+    {
+      "name": "resources",
+      "command": [
+        "legends-stripe",
+        "resources",
+        "--json"
+      ],
+      "paid_calls": false
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "product": "legends-stripe",
+  "banner_template": "legends-type-v1",
+  "social_template": "legends-social-v1",
+  "subtitle": "stripe catalog governance, treasury telemetry, and webhook fortification without sdk lock-in",
+  "font": "Legends Regular",
+  "font_sha256": "3769f0f76477a7d9e2e6cb40422dedacb56c9ab1a6f7beee89b2b9ba6b8091ee",
+  "font_redistributed": false,
+  "files": [
+    {
+      "name": "banner.png",
+      "bytes": 71540,
+      "sha256": "75571ceea46ecf8fbeb897c4a818b0ef8fd658f8e854f0d583373bad96827569"
+    },
+    {
+      "name": "banner.webp",
+      "bytes": 29032,
+      "sha256": "dd3bf7d1fe3aa13e992875e1c650966c27a4e166d54ce09bc337fba5784c6ac3"
+    },
+    {
+      "name": "preview.png",
+      "bytes": 26743,
+      "sha256": "4a6bbc908b51f41e45e69612a0869af19e79c86b5d1349cda2f023cf659b6271"
+    },
+    {
+      "name": "social-preview.png",
+      "bytes": 23734,
+      "sha256": "b6268a514f1482bb296e06e80c93813c67a0aeab287c896186dc75919db91690"
+    }
+  ]
+}

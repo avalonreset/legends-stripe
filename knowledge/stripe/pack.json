@@ -1,0 +1,66 @@
+{
+  "schema": "legends.knowledge-pack/v1",
+  "id": "stripe",
+  "module": "legends-stripe",
+  "version": "0.1.0",
+  "entrypoint": "index.md",
+  "files": [
+    {
+      "path": "authentication-and-modes.md",
+      "sha256": "fc47c8772502f8e002a8645342fe3844ec27e072c861ef1fb7de0aa36e8f3d22"
+    },
+    {
+      "path": "catalog-and-price-ladders.md",
+      "sha256": "e161cfec28c480977cb23f60651af65abd303d4538b1cb51200cb74ca892ae4c"
+    },
+    {
+      "path": "checkout-and-custom-domains.md",
+      "sha256": "4e985156d7246d0ad762f3fdaa017be77e24fe8c64185671c228301583e78d9c"
+    },
+    {
+      "path": "index.md",
+      "sha256": "333abef6af4a4e21ccc7bacbe5641752b529928f7e8fc24e62112412de2157f6"
+    },
+    {
+      "path": "overview.md",
+      "sha256": "fdf6c3574755ee5bab7302794ab3689a63776c9f080338c7acd0145a0e25de09"
+    },
+    {
+      "path": "sources.md",
+      "sha256": "2e5551e02eb5e34bb78ad8a8fc9a5ea7ad19a7d1eab913d449ffca24e2b25eb7"
+    },
+    {
+      "path": "subscriptions-and-dunning.md",
+      "sha256": "c70f4a9b32f4ae13d5868d036bd8966205a41341766ebe8adc1a894346ebce37"
+    },
+    {
+      "path": "templates/private-operation-receipt.md",
+      "sha256": "14d5d4a6460cf160ce45b60ab054312d4e3a01254ea700e71aaf19623e4ce761"
+    },
+    {
+      "path": "templates/treasury-telemetry.md",
+      "sha256": "337e35619f9aee8a06c84467ad220c12e41fcec960c65bdda2cce48bad72aaf4"
+    },
+    {
+      "path": "templates/webhook-fortification-receipt.md",
+      "sha256": "9f73f08a96f4b111b28ce42ec7fa4234c14726a632741cc0ec2af83909e267da"
+    },
+    {
+      "path": "treasury-and-stripe-drag.md",
+      "sha256": "fad8915e89fdb54192c3d5cc9fe9b58273b24dd0cb2d25cef158804a769888d2"
+    },
+    {
+      "path": "troubleshooting.md",
+      "sha256": "0cd737592efd73b5ea6b371d400a2eb6f1a49b2fadc72f746c750e7cab2c00b6"
+    },
+    {
+      "path": "webhooks-and-soft-land-lifecycle.md",
+      "sha256": "3f16e2cec00a693e09954b1ae4ce49843ea02147090c1eeab26af36ccc2f4165"
+    }
+  ],
+  "ontology": {
+    "suggested_home": "wiki/library/legends-stripe/stripe",
+    "purpose": "Operate Stripe payment infrastructure, catalog governance, treasury telemetry, and webhook fortification with source-cited runbooks.",
+    "kind": "library"
+  }
+}

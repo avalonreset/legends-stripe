@@ -1,0 +1,120 @@
+name: checks
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.11', '3.14']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Release gate
+        run: python scripts/check_release.py --root .
+      - name: Install test tooling
+        run: python -m pip install --upgrade "pip>=26.2.2" setuptools
+      - name: Test suite
+        run: python -m unittest discover -s tests -v
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install build
+          python -m build
+      - name: Clean install outside checkout
+        shell: bash
+        run: python -m pip install dist/*.whl
+      - name: Installed wheel mirror tests
+        run: python tests/test_packaging.py WheelSmoke -v
+      - name: Packaged CLI smoke outside checkout
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -e
+          legends-stripe --version
+          legends-stripe doctor
+          legends-stripe resources > resources.json
+          python - <<'EOF'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          info = json.load(open("resources.json"))
+          assert info["source"] == "package_data", info["source"]
+          root = Path(info["root"])
+          assert root.is_absolute(), info["root"]
+          recipe = Path(info["recipe"])
+          if not recipe.is_absolute():
+              recipe = root / recipe
+          assert recipe.is_file(), str(recipe)
+          assert recipe.name == "AGENT-RECIPE.md", recipe.name
+          pack_manifest = Path(info["pack_manifest"])
+          assert pack_manifest.is_file(), str(pack_manifest)
+          pack = json.loads(pack_manifest.read_text(encoding="utf-8"))
+          assert pack["schema"] == "legends.knowledge-pack/v1", pack.get("schema")
+          for item in pack["files"]:
+              target = pack_manifest.parent / "vault" / item["path"]
+              digest = hashlib.sha256(target.read_bytes()).hexdigest()
+              assert digest == item["sha256"], item["path"]
+          print("resource smoke OK")
+          EOF
+
+  empire-attachment:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Build and install Stripe wheel
+        shell: bash
+        run: |
+          set -e
+          python -m pip install build
+          python -m build --wheel
+          python -m pip install dist/*.whl
+      - name: Check out pinned Empire engine
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: avalonreset/legends-empire
+          ref: 8a74f3e0b0df498c074a2b3461be43ba69ab4fd2
+          path: .integration/empire
+      - name: Attach packaged knowledge on the native OS
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -e
+          legends-stripe resources > resources.json
+          python - <<'EOF'
+          import json
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+          info = json.load(open("resources.json"))
+          assert info["source"] == "package_data", info["source"]
+          pack = info["pack_manifest"]
+          workspace = Path(os.environ["GITHUB_WORKSPACE"])
+          subprocess.run([
+              sys.executable,
+              str(workspace / "scripts" / "verify_knowledge_attachment.py"),
+              "--empire-source", str(workspace / ".integration" / "empire"),
+              "--pack", pack,
+          ], check=True)
+          EOF
