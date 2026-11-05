@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import urllib.error
@@ -19,6 +21,10 @@ from . import __version__
 DEFAULT_BASE_URL = "https://api.stripe.com"
 ALLOWED_HOSTS = {"api.stripe.com"}
 FORBIDDEN_STATEMENT_CHARS = set("<>\\'\"*")
+MAX_FILE_BYTES = 1024 * 1024
+MAX_RESPONSE_BYTES = 10 * 1024 * 1024
+STRIPE_ID_RE = re.compile(r"^[a-z]{2,10}_[A-Za-z0-9_]{1,120}$")
+_SECRET_SCRUB_RE = re.compile(r"\b(?:sk_live_|sk_test_|rk_live_|rk_test_|whsec_)[A-Za-z0-9_]+")
 
 SOFT_LAND_WEBHOOK_EVENTS = (
     "checkout.session.completed",
@@ -27,6 +33,116 @@ SOFT_LAND_WEBHOOK_EVENTS = (
     "customer.subscription.updated",
     "customer.subscription.deleted",
 )
+
+
+def scrub_secrets(text: str) -> str:
+    """Redact any Stripe secret or webhook signing token from error or log strings."""
+    return _SECRET_SCRUB_RE.sub("[REDACTED_STRIPE_SECRET]", text or "")
+
+
+def validate_stripe_id(value: str, *, expected_prefix: str | tuple[str, ...] | None = None, field_name: str = "id") -> str:
+    """Validate that a Stripe resource identifier is a single safe path token (prevents CWE-22 path traversal)."""
+    cleaned = (value or "").strip()
+    if not STRIPE_ID_RE.fullmatch(cleaned):
+        raise StripeError(f"Invalid Stripe {field_name} format: {scrub_secrets(cleaned)!r}")
+    if expected_prefix is not None:
+        prefixes = (expected_prefix,) if isinstance(expected_prefix, str) else expected_prefix
+        if not any(cleaned.startswith(p) for p in prefixes):
+            raise StripeError(f"Expected Stripe {field_name} starting with {prefixes}, got {scrub_secrets(cleaned)!r}")
+    return cleaned
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Refuse all automatic HTTP redirects so Authorization headers or SSRF probes never follow 3xx responses."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, f"Redirects are disabled ({code})", headers, fp)
+
+
+def build_safe_opener() -> urllib.request.OpenerDirector:
+    """Build a urllib opener that refuses automatic HTTP redirects."""
+    return urllib.request.build_opener(_NoRedirectHandler())
+
+
+def validate_public_https_host(hostname: str, *, resolve_dns: bool = True) -> str:
+    """Reject loopback, link-local, RFC1918 private, multicast, and internal hostnames/IPs (CWE-918 SSRF defense)."""
+    host = (hostname or "").strip().lower().rstrip(".")
+    if not host or "/" in host or "@" in host or ":" in host or " " in host:
+        raise StripeError(f"Invalid target hostname: {hostname!r}")
+    if host in ("localhost", "localhost.localdomain") or host.endswith((".local", ".internal", ".localhost", ".lan", ".home.arpa")):
+        raise StripeError(f"Refusing non-public or local hostname: {host}")
+
+    def _check_ip(ip_str: str) -> None:
+        addr = ipaddress.ip_address(ip_str)
+        if (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_multicast
+            or addr.is_reserved
+            or addr.is_unspecified
+        ):
+            raise StripeError(f"Refusing non-public IP address target: {ip_str}")
+
+    try:
+        _check_ip(host)
+        return host
+    except ValueError:
+        pass
+
+    if resolve_dns:
+        try:
+            infos = socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
+        except socket.gaierror:
+            return host
+        for family, _, _, _, sockaddr in infos:
+            if family in (socket.AF_INET, socket.AF_INET6) and sockaddr:
+                _check_ip(str(sockaddr[0]))
+    return host
+
+
+def _reject_symlink_chain(path: Path) -> None:
+    """Refuse symlinks on the target path or any existing parent directory (CWE-59)."""
+    if path.is_symlink():
+        raise StripeError(f"Refusing to operate on symlink path: {path}")
+    for parent in path.parents:
+        if parent.is_symlink():
+            raise StripeError(f"Refusing to traverse symlinked directory: {parent}")
+
+
+def safe_read_text_file(path: str | Path, *, max_bytes: int = MAX_FILE_BYTES, label: str = "file") -> tuple[Path, str]:
+    """Read a regular UTF-8 file after verifying it is not a symlink and does not exceed max_bytes."""
+    raw_path = Path(path).expanduser()
+    _reject_symlink_chain(raw_path)
+    target = raw_path.resolve()
+    if not target.is_file() or target.is_symlink():
+        raise StripeError(f"Requested {label} does not exist or is not a regular file: {target}")
+    size = target.stat().st_size
+    if size > max_bytes:
+        raise StripeError(f"Requested {label} exceeds {max_bytes} bytes ({size} bytes): {target}")
+    return target, target.read_text(encoding="utf-8", errors="replace")
+
+
+def safe_write_text_file(path_str: str | Path, content: str, *, overwrite: bool = False) -> str:
+    """Write a single UTF-8 report file safely without following symlinks or silently overwriting existing files."""
+    raw_path = Path(path_str).expanduser()
+    _reject_symlink_chain(raw_path)
+    target = raw_path.resolve()
+    if target.exists() and target.is_symlink():
+        raise StripeError(f"Refusing to write to symlink path: {target}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if overwrite:
+        with target.open("w", encoding="utf-8") as handle:
+            handle.write(content)
+    else:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        try:
+            fd = os.open(str(target), flags, 0o600)
+        except FileExistsError:
+            raise StripeError(f"Output file already exists (pass --overwrite to replace): {target}") from None
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+    return str(target)
 
 
 class StripeError(RuntimeError):
@@ -87,11 +203,9 @@ classify_stripe_key = classify_key
 
 def load_dotenv_file(path: str | Path) -> dict[str, str]:
     """Read an explicit .env file requested by the operator without persisting state."""
-    target = Path(path).expanduser().resolve()
-    if not target.is_file():
-        raise StripeError(f"Requested env file does not exist: {target}")
+    _, content = safe_read_text_file(path, label="env file")
     values: dict[str, str] = {}
-    for line in target.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line in content.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or "=" not in stripped:
             continue
@@ -366,19 +480,23 @@ class StripeClient:
                 headers["Idempotency-Key"] = idempotency_key
 
         req = urllib.request.Request(url, data=body, headers=headers, method=method_u)
+        opener = build_safe_opener()
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                raw = resp.read().decode("utf-8", errors="replace")
+            with opener.open(req, timeout=self.timeout) as resp:
+                raw_bytes = resp.read(MAX_RESPONSE_BYTES + 1)
+                if len(raw_bytes) > MAX_RESPONSE_BYTES:
+                    raise StripeError(f"Stripe API response exceeded {MAX_RESPONSE_BYTES} bytes")
+                raw = raw_bytes.decode("utf-8", errors="replace")
                 data = json.loads(raw) if raw else {}
                 return data
         except urllib.error.HTTPError as exc:
-            raw_err = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            raw_err = exc.read(65536).decode("utf-8", errors="replace") if exc.fp else ""
             req_id = exc.headers.get("Request-Id") if exc.headers else None
             try:
                 parsed_err = json.loads(raw_err).get("error", {})
             except Exception:
                 parsed_err = {}
-            msg = parsed_err.get("message") or f"Stripe HTTP {exc.code} on {method_u} {rel}"
+            msg = scrub_secrets(parsed_err.get("message") or f"Stripe HTTP {exc.code} on {method_u} {rel}")
             raise StripeError(
                 msg,
                 status=exc.code,
@@ -387,7 +505,7 @@ class StripeClient:
                 request_id=req_id,
             ) from None
         except urllib.error.URLError as exc:
-            raise StripeError(f"Network error contacting Stripe API: {exc.reason}") from None
+            raise StripeError(f"Network error contacting Stripe API: {scrub_secrets(str(exc.reason))}") from None
 
     def list_all(
         self,

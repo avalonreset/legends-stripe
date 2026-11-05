@@ -14,7 +14,10 @@ from .api import (
     SOFT_LAND_WEBHOOK_EVENTS,
     StripeClient,
     StripeError,
+    build_safe_opener,
     plan_digest,
+    validate_public_https_host,
+    validate_stripe_id,
 )
 
 EXPECTED_STRIPE_CNAME = "hosted-checkout.stripecdn.com"
@@ -226,6 +229,9 @@ def upsert_webhook_endpoint(
     parsed = urllib.parse.urlparse(url.strip())
     if parsed.scheme != "https" or not parsed.hostname:
         raise StripeError("Webhook endpoint URL must be a valid https:// URL.")
+    validate_public_https_host(parsed.hostname, resolve_dns=False)
+    if endpoint_id:
+        endpoint_id = validate_stripe_id(endpoint_id, expected_prefix="we_", field_name="endpoint_id")
 
     chosen_events = list(events or SOFT_LAND_WEBHOOK_EVENTS)
     params: dict[str, Any] = {
@@ -277,10 +283,11 @@ def upsert_webhook_endpoint(
 
 
 def probe_unsigned_webhook_gate(url: str, *, timeout: int = 15) -> dict[str, Any]:
-    """Send an unsigned POST {} to a webhook URL and verify it rejects unsigned traffic with HTTP 400/401/403."""
+    """Send an unsigned POST {} to a public HTTPS webhook URL and verify it rejects unsigned traffic with HTTP 400/401/403."""
     parsed = urllib.parse.urlparse(url.strip())
-    if parsed.scheme not in ("https", "http") or not parsed.hostname:
-        raise StripeError("Probe URL must be a valid HTTP/HTTPS URL.")
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise StripeError("Probe URL must be a valid public https:// URL.")
+    validate_public_https_host(parsed.hostname, resolve_dns=True)
 
     req = urllib.request.Request(
         url.strip(),
@@ -291,8 +298,9 @@ def probe_unsigned_webhook_gate(url: str, *, timeout: int = 15) -> dict[str, Any
         },
         method="POST",
     )
+    opener = build_safe_opener()
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with opener.open(req, timeout=timeout) as resp:
             status = resp.status
             body = resp.read(512).decode("utf-8", errors="replace")
             return {
@@ -330,9 +338,10 @@ def _doh_lookup_detailed(name: str, record_type: str) -> dict[str, Any]:
         f"https://cloudflare-dns.com/dns-query?{q}",
         headers={"Accept": "application/dns-json", "User-Agent": "legends-stripe/0.1.0"},
     )
+    opener = build_safe_opener()
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+        with opener.open(req, timeout=10) as resp:
+            payload = json.loads(resp.read(65536).decode("utf-8", errors="replace"))
             rcode = int(payload.get("Status", -1))
             answers = payload.get("Answer") or []
             authority = payload.get("Authority") or []
@@ -350,9 +359,7 @@ def _doh_lookup_detailed(name: str, record_type: str) -> dict[str, Any]:
 
 def check_custom_domain(hostname: str) -> dict[str, Any]:
     """Verify public CNAME, _acme-challenge TXT, and HTTPS reachability for a Stripe custom payment domain."""
-    host = hostname.strip().lower().rstrip(".")
-    if not host or "/" in host:
-        raise StripeError("Provide a bare hostname such as 'pay.example.com'.")
+    host = validate_public_https_host(hostname, resolve_dns=False)
 
     cname_info = _doh_lookup_detailed(host, "CNAME")
     txt_info = _doh_lookup_detailed(f"_acme-challenge.{host}", "TXT")
@@ -362,8 +369,10 @@ def check_custom_domain(hostname: str) -> dict[str, Any]:
 
     https_status: int | None = None
     try:
+        validate_public_https_host(host, resolve_dns=True)
         req = urllib.request.Request(f"https://{host}/", headers={"User-Agent": "legends-stripe/0.1.0"}, method="GET")
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        opener = build_safe_opener()
+        with opener.open(req, timeout=10) as resp:
             https_status = resp.status
     except urllib.error.HTTPError as exc:
         https_status = exc.code

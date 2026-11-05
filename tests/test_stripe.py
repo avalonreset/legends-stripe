@@ -14,10 +14,13 @@ from legends_stripe.api import (
     classify_key,
     encode_stripe_form,
     flatten_stripe_params,
+    scrub_secrets,
     validate_metadata,
     validate_price_fields,
     validate_product_fields,
+    validate_public_https_host,
     validate_statement_descriptor,
+    validate_stripe_id,
 )
 from legends_stripe.blueprints import get_blueprint, list_blueprints
 from legends_stripe.catalog import (
@@ -36,6 +39,7 @@ from legends_stripe.subscriptions import scan_subscription_radar
 from legends_stripe.telemetry import build_treasury_telemetry, render_telemetry_markdown
 from legends_stripe.webhooks import (
     audit_webhooks,
+    probe_unsigned_webhook_gate,
     sign_stripe_webhook_payload,
     upsert_webhook_endpoint,
     verify_stripe_webhook_signature,
@@ -123,6 +127,28 @@ class ApiAndEncodingTests(unittest.TestCase):
         self.assertTrue(validate_product_fields(name="Valid", description="x" * 501))
         self.assertTrue(validate_metadata({f"k{i}": "v" for i in range(55)}))
         self.assertTrue(validate_price_fields(currency="usd", unit_amount=-5))
+
+    def test_ssrf_id_and_secret_scrub_defenses(self) -> None:
+        self.assertEqual(validate_stripe_id("price_123Abc", expected_prefix="price_"), "price_123Abc")
+        with self.assertRaises(StripeError):
+            validate_stripe_id("price_../../v1/charges", expected_prefix="price_")
+        with self.assertRaises(StripeError):
+            validate_public_https_host("127.0.0.1", resolve_dns=False)
+        with self.assertRaises(StripeError):
+            validate_public_https_host("169.254.169.254", resolve_dns=False)
+        with self.assertRaises(StripeError):
+            validate_public_https_host("192.168.1.10", resolve_dns=False)
+        with self.assertRaises(StripeError):
+            validate_public_https_host("localhost", resolve_dns=False)
+        with self.assertRaises(StripeError):
+            probe_unsigned_webhook_gate("http://example.com/webhook")
+        with self.assertRaises(StripeError):
+            probe_unsigned_webhook_gate("https://127.0.0.1/webhook")
+
+        redacted = scrub_secrets("Failed with key sk_test_abc123456 and whsec_xyz987654")
+        self.assertNotIn("sk_test_abc123456", redacted)
+        self.assertNotIn("whsec_xyz987654", redacted)
+        self.assertIn("[REDACTED_STRIPE_SECRET]", redacted)
 
 
 class TelemetryTests(unittest.TestCase):

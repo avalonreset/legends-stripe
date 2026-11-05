@@ -36,11 +36,17 @@ FORBIDDEN = [
     r"(?i)[a-z]:\\users\\",
     r"(?i)\.tail[a-z0-9]+\.ts\.net",
     r"(?i)sk_live_[a-z0-9]{12,}",
+    r"(?i)rk_live_[a-z0-9]{12,}",
     r"gh[pousr]_[A-Za-z0-9]{20,}",
     r"-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----",
     r"CREATE_NO_WINDOW",
     r"0x08000000",
     r"(?i)-WindowStyle\s+Hidden",
+    r"(?i)-ExecutionPolicy\s+Bypass",
+    r"ctypes\.windll",
+    r"(?i)CryptUnprotectData",
+    r"(?i)GetAsyncKeyState",
+    r"(?i)IndexedDB",
 ]
 FORBIDDEN_FILES = {".pem", ".key", ".p12", ".pfx", ".ps1", ".bat", ".cmd", ".vbs", ".ahk"}
 PNG_METADATA_CHUNKS = {"tEXt", "iTXt", "zTXt", "eXIf"}

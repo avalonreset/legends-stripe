@@ -14,6 +14,8 @@ from .api import (
     StripeError,
     detect_stripe_cli,
     resolve_credentials,
+    safe_read_text_file,
+    safe_write_text_file,
 )
 from .blueprints import get_blueprint, list_blueprints
 from .catalog import (
@@ -42,24 +44,27 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _write_output_file(path_str: str, content: str, *, overwrite: bool = False) -> str:
-    target = Path(path_str).expanduser().resolve()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    mode = "w" if overwrite else "x"
-    try:
-        with target.open(mode, encoding="utf-8") as handle:
-            handle.write(content)
-    except FileExistsError:
-        raise StripeError(f"Output file already exists (pass --overwrite to replace): {target}") from None
-    return str(target)
+    return safe_write_text_file(path_str, content, overwrite=overwrite)
 
 
 def _load_payload_arg(value: str) -> str:
     if value.startswith("@"):
-        p = Path(value[1:]).expanduser().resolve()
-        if not p.is_file():
-            raise StripeError(f"Payload file not found: {p}")
-        return p.read_text(encoding="utf-8")
+        _, content = safe_read_text_file(value[1:], label="payload file")
+        return content
     return value
+
+
+def _resolve_webhook_secret_arg(args: argparse.Namespace) -> str:
+    raw = getattr(args, "secret", None)
+    if raw:
+        if str(raw).startswith("@"):
+            _, text = safe_read_text_file(str(raw)[1:], label="webhook secret file")
+            return text.strip()
+        return str(raw).strip()
+    creds = resolve_credentials(getattr(args, "env_file", None))
+    if creds.get("webhook_secret"):
+        return str(creds["webhook_secret"]).strip()
+    raise StripeError("Missing webhook signing secret. Pass --secret whsec_... or set STRIPE_WEBHOOK_SECRET in the environment / --env-file.")
 
 
 def _make_client(args: argparse.Namespace, *, fallback_env: str | None = None) -> StripeClient:
@@ -322,7 +327,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generate a valid Stripe-Signature HMAC-SHA256 header for offline webhook testing.",
     )
     p_wsig.add_argument("--payload", required=True, help="Raw JSON payload string or @path/to/payload.json.")
-    p_wsig.add_argument("--secret", required=True, help="Test webhook signing secret (whsec_...).")
+    p_wsig.add_argument("--secret", help="Webhook signing secret (whsec_... or @file; defaults to STRIPE_WEBHOOK_SECRET).")
     p_wsig.add_argument("--timestamp", type=int, help="Optional Unix timestamp override.")
 
     p_wver = sub.add_parser(
@@ -332,7 +337,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_wver.add_argument("--payload", required=True, help="Raw JSON payload string or @path/to/payload.json.")
     p_wver.add_argument("--signature", required=True, help="Stripe-Signature header value (t=...,v1=...).")
-    p_wver.add_argument("--secret", required=True, help="Webhook signing secret (whsec_...).")
+    p_wver.add_argument("--secret", help="Webhook signing secret (whsec_... or @file; defaults to STRIPE_WEBHOOK_SECRET).")
     p_wver.add_argument("--tolerance", type=int, default=300, help="Timestamp replay tolerance in seconds (default: 300).")
     p_wver.add_argument("--now", type=int, help="Optional current Unix timestamp override for deterministic tests.")
 
@@ -445,13 +450,13 @@ def main(argv: list[str] | None = None) -> int:
                 out = spec
         elif args.command == "catalog-diff":
             client = _make_client(args)
-            spec_path = Path(args.spec).expanduser().resolve()
-            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            _, spec_raw = safe_read_text_file(args.spec, label="catalog spec")
+            spec = json.loads(spec_raw)
             out = diff_catalog_spec(client, spec)
         elif args.command == "catalog-sync":
             client = _make_client(args)
-            spec_path = Path(args.spec).expanduser().resolve()
-            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            _, spec_raw = safe_read_text_file(args.spec, label="catalog spec")
+            spec = json.loads(spec_raw)
             out = sync_catalog_spec(
                 client,
                 spec,
@@ -506,13 +511,15 @@ def main(argv: list[str] | None = None) -> int:
             out = probe_unsigned_webhook_gate(args.url)
         elif args.command == "sign-webhook":
             payload_str = _load_payload_arg(args.payload)
-            out = sign_stripe_webhook_payload(payload_str, args.secret, timestamp=args.timestamp)
+            secret_str = _resolve_webhook_secret_arg(args)
+            out = sign_stripe_webhook_payload(payload_str, secret_str, timestamp=args.timestamp)
         elif args.command == "verify-webhook":
             payload_str = _load_payload_arg(args.payload)
+            secret_str = _resolve_webhook_secret_arg(args)
             out = verify_stripe_webhook_signature(
                 payload_str,
                 args.signature,
-                args.secret,
+                secret_str,
                 tolerance_seconds=args.tolerance,
                 now_timestamp=args.now,
             )

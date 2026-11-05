@@ -42,7 +42,9 @@ The vault also ships as an attachable Empire knowledge pack (`knowledge/stripe/p
 
 ## Limits and safety
 
-- HTTPS `api.stripe.com` origin only for Stripe API traffic.
+- HTTPS `api.stripe.com` origin only for Stripe API traffic, with automatic HTTP redirects disabled.
 - Never print `sk_live_`, `sk_test_`, `rk_`, or `whsec_` values in terminal output, logs, or receipts.
+- Never read local browser profile databases, DPAPI stores, or global credential stores; read keys strictly from environment variables or an explicit `--env-file <path>`.
+- Never spawn hidden consoles, execution-policy bypass shell wrappers, or bulk file-overwrite loops.
 - Never execute mutations against a `live` key without explicit user authorization for the exact reviewed `plan_sha256` and `--live`.
 - Archiving a Product with `product-upsert --inactive` automatically cascades `active=false` to its active child Prices so orphaned active Prices are not left behind.

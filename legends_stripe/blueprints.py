@@ -181,13 +181,25 @@ export const POST: APIRoute = async ({ request, url }) => {
   const secretKey = process.env.STRIPE_SECRET_KEY || import.meta.env.STRIPE_SECRET_KEY || "";
   const body = await request.json().catch(() => ({}));
   const customerId = String(body.customer_id || "").trim();
-  if (!customerId.startsWith("cus_")) {
+  if (!/^cus_[A-Za-z0-9_]+$/.test(customerId)) {
     return new Response(JSON.stringify({ ok: false, error: "invalid_customer_id" }), { status: 400 });
+  }
+
+  let returnUrl = `${url.origin}/account`;
+  if (typeof body.return_url === "string" && body.return_url.trim()) {
+    try {
+      const candidate = new URL(body.return_url.trim(), url.origin);
+      if (candidate.origin === url.origin) {
+        returnUrl = candidate.toString();
+      }
+    } catch {
+      // Keep default same-origin returnUrl
+    }
   }
 
   const form = new URLSearchParams({
     customer: customerId,
-    return_url: String(body.return_url || `${url.origin}/account`),
+    return_url: returnUrl,
   });
 
   const resp = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {

@@ -5,7 +5,13 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .api import StripeClient, StripeError, classify_stripe_key
+from .api import (
+    StripeClient,
+    StripeError,
+    classify_stripe_key,
+    safe_read_text_file,
+    validate_stripe_id,
+)
 from .telemetry import format_cents
 
 SECRET_KEY_VARS = {
@@ -40,9 +46,7 @@ def audit_env_file(
     verify_live: bool = False,
 ) -> dict[str, Any]:
     """Audit a project .env file for Stripe key parity, empty vars, and live Price/Product validity."""
-    path = Path(target_env_path).expanduser().resolve()
-    if not path.is_file():
-        raise StripeError(f"Target .env file not found: {path}")
+    path, content = safe_read_text_file(target_env_path, label="target .env file")
 
     errors: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
@@ -53,7 +57,7 @@ def audit_env_file(
     secret_modes: set[str] = set()
     publishable_modes: set[str] = set()
 
-    for idx, raw_line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+    for idx, raw_line in enumerate(content.splitlines(), start=1):
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -196,8 +200,9 @@ def audit_env_file(
             rid = item["id"]
             rtype = item["resource_type"]
             try:
+                safe_rid = validate_stripe_id(rid, expected_prefix="price_" if rtype == "price" else "prod_", field_name=rtype)
                 if rtype == "price":
-                    pr = client.request("GET", f"/v1/prices/{rid}", params={"expand": ["product"]})
+                    pr = client.request("GET", f"/v1/prices/{safe_rid}", params={"expand": ["product"]})
                     prod = pr.get("product") if isinstance(pr.get("product"), dict) else {}
                     rec = pr.get("recurring") or {}
                     amt = pr.get("unit_amount")
@@ -241,7 +246,7 @@ def audit_env_file(
                             }
                         )
                 else:
-                    prod = client.request("GET", f"/v1/products/{rid}")
+                    prod = client.request("GET", f"/v1/products/{safe_rid}")
                     prod_active = bool(prod.get("active", True))
                     item.update(
                         {

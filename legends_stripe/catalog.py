@@ -13,6 +13,7 @@ from .api import (
     validate_price_fields,
     validate_product_fields,
     validate_statement_descriptor,
+    validate_stripe_id,
 )
 
 
@@ -530,6 +531,8 @@ def upsert_product(
     if metadata:
         params["metadata"] = metadata
 
+    if product_id:
+        product_id = validate_stripe_id(product_id, expected_prefix="prod_", field_name="product_id")
     action = "product-update" if product_id else "product-create"
     prices_to_deactivate: list[str] = []
     if product_id and not active:
@@ -600,6 +603,7 @@ def run_checkout_canary(
     """Create a zero-charge disposable Checkout Session, verify its URL and state, and immediately expire it."""
     client.require_mutation_gate(allow_live=allow_live)
     if price_id:
+        price_id = validate_stripe_id(price_id, expected_prefix="price_", field_name="price_id")
         line_item: dict[str, Any] = {"price": price_id, "quantity": 1}
     else:
         line_item = {

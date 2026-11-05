@@ -43,30 +43,7 @@ jobs:
           legends-stripe --version
           legends-stripe doctor
           legends-stripe resources > resources.json
-          python - <<'EOF'
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-          info = json.load(open("resources.json"))
-          assert info["source"] == "package_data", info["source"]
-          root = Path(info["root"])
-          assert root.is_absolute(), info["root"]
-          recipe = Path(info["recipe"])
-          if not recipe.is_absolute():
-              recipe = root / recipe
-          assert recipe.is_file(), str(recipe)
-          assert recipe.name == "AGENT-RECIPE.md", recipe.name
-          pack_manifest = Path(info["pack_manifest"])
-          assert pack_manifest.is_file(), str(pack_manifest)
-          pack = json.loads(pack_manifest.read_text(encoding="utf-8"))
-          assert pack["schema"] == "legends.knowledge-pack/v1", pack.get("schema")
-          for item in pack["files"]:
-              target = pack_manifest.parent / "vault" / item["path"]
-              digest = hashlib.sha256(target.read_bytes()).hexdigest()
-              assert digest == item["sha256"], item["path"]
-          print("resource smoke OK")
-          EOF
+          python "$GITHUB_WORKSPACE/scripts/smoke_installed_resources.py" resources.json
 
   empire-attachment:
     strategy:
@@ -85,7 +62,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          python -m pip install build
+          python -m pip install --upgrade "pip>=26.2.2" build
           python -m build --wheel
           python -m pip install dist/*.whl
       - name: Check out pinned Empire engine
@@ -101,20 +78,6 @@ jobs:
         run: |
           set -e
           legends-stripe resources > resources.json
-          python - <<'EOF'
-          import json
-          import os
-          import subprocess
-          import sys
-          from pathlib import Path
-          info = json.load(open("resources.json"))
-          assert info["source"] == "package_data", info["source"]
-          pack = info["pack_manifest"]
-          workspace = Path(os.environ["GITHUB_WORKSPACE"])
-          subprocess.run([
-              sys.executable,
-              str(workspace / "scripts" / "verify_knowledge_attachment.py"),
-              "--empire-source", str(workspace / ".integration" / "empire"),
-              "--pack", pack,
-          ], check=True)
-          EOF
+          python "$GITHUB_WORKSPACE/scripts/smoke_installed_resources.py" resources.json
+          PACK_PATH=$(python -c 'import json; print(json.load(open("resources.json"))["pack_manifest"])')
+          python "$GITHUB_WORKSPACE/scripts/verify_knowledge_attachment.py" --empire-source "$GITHUB_WORKSPACE/.integration/empire" --pack "$PACK_PATH"
