@@ -144,3 +144,11 @@ Secret keys (`sk_live_`, `sk_test_`, `rk_`) and webhook secrets (`whsec_`) are s
 ## License
 
 MIT License. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
+
+---
+
+**Specification & benchmarks on cto-legends.com:**
+- **Module specification & architecture matrix:** [cto-legends.com/modules/legends-stripe](https://cto-legends.com/modules/legends-stripe)
+- **Related engineering dispatches:** [Fractional CTO Advisory: Technical Due Diligence Guide](https://cto-legends.com/blog?post=fractional-cto-technical-due-diligence-guide) · [How to Build AI Agents: Production CLI & MCP Routing](https://cto-legends.com/blog?post=how-to-build-ai-agents-cli-mcp-routing) · [Claude Code Skills: MCP vs CLI Workflow Architecture](https://cto-legends.com/blog?post=claude-code-skills-mcp-vs-cli-workflow)
+- **Ecosystem hub:** [cto-legends.com/home](https://cto-legends.com/home)
+
