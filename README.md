@@ -7,8 +7,8 @@
 [![checks](https://img.shields.io/github/actions/workflow/status/avalonreset/legends-stripe/checks.yml?branch=main&label=checks&style=flat-square&labelColor=000000)](https://github.com/avalonreset/legends-stripe/actions/workflows/checks.yml)
 [![license](https://img.shields.io/github/license/avalonreset/legends-stripe?label=license&style=flat-square&labelColor=000000&color=666666)](LICENSE)
 
-**Stripe CLI, Stripe Checkout, Stripe Billing, webhook signature verification, and treasury fee telemetry from Python or your terminal.**
-`legends-stripe` connects scripts, applications, and coding agents to the Stripe API (`v1`) with offline request previews, SHA-256 mutation locks, `.env` price-ID drift detection, Stripe fee calculator telemetry, subscription dunning diagnostics, and drop-in Astro, Node, and Python server blueprints.
+**Stripe CLI, Stripe Checkout, Stripe Billing, B2B Hosted Invoicing, webhook signature verification, and treasury fee telemetry from Python or your terminal.**
+`legends-stripe` connects scripts, applications, and coding agents to the Stripe API (`v1`) with offline request previews, SHA-256 mutation locks, `.env` price-ID drift detection, Stripe fee calculator telemetry, subscription dunning diagnostics, B2B Hosted Invoice governance, and drop-in Astro, Node, and Python server blueprints.
 
 Python 3.11+ | Windows, Linux, macOS | Zero runtime dependencies | MIT licensed
 
@@ -32,11 +32,12 @@ Install with `cto-legends install legends-stripe`, then follow the module recipe
 | Product catalog lint & export | `legends-stripe catalog-audit`, `catalog-export`, `product-upsert` / `audit_catalog()` | Flags 500-char description truncation, 22-char statement descriptor violations, orphaned active Prices, exports specs, and upserts/archives Products |
 | Declarative price ladder sync | `legends-stripe ladder-plan`, `catalog-diff`, `catalog-sync` | Generates exponential or custom price ladders, diffs against Stripe, and syncs with preview-first SHA-256 plan hashes |
 | Stripe Billing & subscription radar | `legends-stripe subscription-radar` / `scan_subscription_radar()` | Computes active MRR/ARR, past-due dunning recovery queues, cancel-at-period-end churn, and duplicate-billed customer alerts |
+| B2B Hosted Invoicing & A/R radar | `legends-stripe invoice-radar`, `invoice-create`, `invoice-void` / `scan_invoice_radar()`, `create_b2b_invoice()`, `void_b2b_invoice()` | Scans B2B `send_invoice` receivables and overdue aging, issues orphan-free 4-step Hosted Invoices (`hosted_invoice_url`, `invoice_pdf`) with 30-char `custom_fields` validation, and voids open invoices |
 | Stripe Checkout canary | `legends-stripe checkout-canary` / `run_checkout_canary()` | Preview-first disposable zero-charge Stripe Checkout Session canary (`--apply --confirm-plan <sha256>`) to prove end-to-end Price readiness |
 | Stripe Webhook signature verification | `legends-stripe verify-webhook`, `sign-webhook`, `webhook-probe` | Constant-time `Stripe-Signature` (`t=...,v1=...`) HMAC-SHA256 verification, test header signing, and live endpoint probing |
 | Webhook lifecycle audit & bootstrap | `legends-stripe webhook-audit`, `webhook-upsert` | Audits endpoints against the 5-event Soft-Land Subscription Lifecycle and registers missing webhooks with preview-first locking |
 | Custom payment domain check | `legends-stripe custom-domain-check` / `check_custom_domain()` | DNS CNAME and HTTPS TLS readiness probe for white-labeled Stripe payment domains |
-| Astro Stripe & Python blueprints | `legends-stripe blueprint` / `list_blueprints()` | Production-ready `astro-webhook`, `astro-checkout`, `astro-portal` (Stripe Customer Portal), and `python-webhook` templates |
+| Astro Stripe & Python blueprints | `legends-stripe blueprint` / `list_blueprints()` | Production-ready `astro-webhook`, `astro-checkout`, `astro-portal` (Stripe Customer Portal), `astro-b2b-invoice` (B2B Hosted Invoice), and `python-webhook` templates |
 
 ## Why `legends-stripe` exists
 
@@ -52,7 +53,7 @@ Developers and founders building on Astro, Next.js, or Python hit the same high-
 ## Install
 
 ```bash
-python -m pip install "https://github.com/avalonreset/legends-stripe/releases/download/v0.1.2/legends_stripe-0.1.2-py3-none-any.whl"
+python -m pip install "https://github.com/avalonreset/legends-stripe/releases/download/v0.1.3/legends_stripe-0.1.3-py3-none-any.whl"
 legends-stripe --version
 legends-stripe doctor
 ```
@@ -95,10 +96,13 @@ legends-stripe catalog-diff --spec spec.json
 legends-stripe catalog-sync --spec spec.json
 ```
 
-### 4. Audit Stripe Billing subscriptions and run a Stripe Checkout canary (`subscription-radar`, `checkout-canary`)
+### 4. Audit Stripe Billing subscriptions, B2B Hosted Invoices, and run a Stripe Checkout canary (`subscription-radar`, `invoice-radar`, `invoice-create`, `invoice-void`, `checkout-canary`)
 
 ```bash
 legends-stripe subscription-radar --redact-pii
+legends-stripe invoice-radar --redact-pii
+legends-stripe invoice-create --customer-email billing@acme.example --company-name "Acme Corp" --amount-cents 102400 --title "Architecture Advisory Sprint" --invoice-number-ref "INV-2026-11-001" --custom-field "Client VAT / Tax ID=DE123456789"
+legends-stripe invoice-void --invoice-id in_1Example123
 legends-stripe checkout-canary --price-id price_1Example123
 legends-stripe checkout-canary --price-id price_1Example123 --apply --confirm-plan <plan_sha256>
 ```
@@ -112,22 +116,23 @@ legends-stripe verify-webhook --payload @event.json --signature "t=1700000000,v1
 legends-stripe custom-domain-check --hostname pay.example.com
 ```
 
-### 6. Export Astro Stripe Checkout, Customer Portal, and Webhook blueprints (`blueprint`)
+### 6. Export Astro Stripe Checkout, Customer Portal, B2B Invoice, and Webhook blueprints (`blueprint`)
 
 ```bash
 legends-stripe blueprint --list
 legends-stripe blueprint --name astro-webhook --raw
 legends-stripe blueprint --name astro-checkout --raw
 legends-stripe blueprint --name astro-portal --raw
+legends-stripe blueprint --name astro-b2b-invoice --raw
 ```
 
 ## FAQ
 
 ### How does `legends-stripe` relate to the official Stripe CLI and `stripe-python` SDK?
-`legends-stripe` is a lightweight, zero-dependency operational governance and diagnostic CLI built on the Python 3.11+ standard library. While the official Stripe CLI focuses on local webhook forwarding and generic resource calls, `legends-stripe` provides opinionated guardrails: `.env` test/live price-ID cross-checking, preview-first SHA-256 catalog sync, cent-exact Stripe fee drag telemetry, double-billing radar, and ready-to-drop Astro and Python webhook blueprints.
+`legends-stripe` is a lightweight, zero-dependency operational governance and diagnostic CLI built on the Python 3.11+ standard library. While the official Stripe CLI focuses on local webhook forwarding and generic resource calls, `legends-stripe` provides opinionated guardrails: `.env` test/live price-ID cross-checking, preview-first SHA-256 catalog sync, cent-exact Stripe fee drag telemetry, double-billing radar, orphan-free B2B Hosted Invoicing, and ready-to-drop Astro and Python webhook blueprints.
 
 ### Can `legends-stripe` mutate my Live Mode Stripe account accidentally?
-No. All write commands (`catalog-sync`, `webhook-upsert`, and `checkout-canary` in Live Mode) run in **preview mode by default** and compute a deterministic SHA-256 `plan_hash`. No Live Mode mutation occurs unless you explicitly pass `--apply --confirm-plan <plan_hash> --live`.
+No. All write commands (`catalog-sync`, `product-upsert`, `webhook-upsert`, `invoice-create`, `invoice-void`, and `checkout-canary`) run in **preview mode by default** and compute a deterministic SHA-256 `plan_hash`. No Live Mode mutation occurs unless you explicitly pass `--apply --confirm-plan <plan_hash> --live`.
 
 ### How does `legends-stripe` protect API keys and customer PII?
 Secret keys (`sk_live_`, `sk_test_`, `rk_`) and webhook secrets (`whsec_`) are scrubbed from CLI outputs, error messages, and Markdown reports. Passing `--redact-pii` masks customer emails and identifiers across all telemetry and subscription audits.

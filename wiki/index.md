@@ -11,7 +11,8 @@ This vault captures source-cited Stripe engineering patterns, API limits, treasu
 5. [Webhooks and Soft-Land Subscription Lifecycle](webhooks-and-soft-land-lifecycle.md): Raw-body `Stripe-Signature` HMAC-SHA256 verification (`sign-webhook`, `verify-webhook`), replay tolerance (`300s`), unsigned POST gate probing (`webhook-probe`), and the 5-event Soft-Land Subscription Lifecycle contract (`webhook-audit`).
 6. [Treasury Telemetry and Stripe Drag](treasury-and-stripe-drag.md): Cent-level reconciliation of `/v1/balance` (`available + pending`) against `/v1/balance_transactions` and `/v1/payouts`, separating card processing fees from Stripe Billing usage drag, and filtering `$1.00` 3DS card setup authorizations.
 7. [Subscription Radar and Duplicate Billing Prevention](subscriptions-and-dunning.md): Scanning active, trialing, `past_due`, and `unpaid` subscriptions (`subscription-radar`), computing normalized MRR, and catching double-billed customers across identical `customer_id` or duplicate Customer records sharing one email.
-8. [Troubleshooting and Failure Modes](troubleshooting.md): Diagnosing common Stripe HTTP 400/401/402/404/429 responses, form-encoding bracket mistakes, webhook signature mismatches, and `.env` price drift.
+8. [B2B Hosted Invoicing and Scheduled Payment Governance](invoicing-and-b2b-settlement.md): Orphan-free 4-step B2B invoice creation (`invoice-create`), custom-field 30-character validation, receivables aging (`invoice-radar`), invoice voiding (`invoice-void`), and governance for Customer-Scheduled Invoice Payments.
+9. [Troubleshooting and Failure Modes](troubleshooting.md): Diagnosing common Stripe HTTP 400/401/402/404/429 responses, form-encoding bracket mistakes, webhook signature mismatches, and `.env` price drift.
 
 ## Sources and Templates
 

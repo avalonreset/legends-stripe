@@ -28,6 +28,12 @@ from .catalog import (
     upsert_product,
 )
 from .env_tools import audit_env_file, build_price_map
+from .invoices import (
+    create_b2b_invoice,
+    parse_custom_field_specs,
+    scan_invoice_radar,
+    void_b2b_invoice,
+)
 from .resources import resolve as resolve_resources, status as resources_status
 from .subscriptions import scan_subscription_radar
 from .telemetry import build_treasury_telemetry, render_telemetry_markdown
@@ -311,6 +317,53 @@ def build_parser() -> argparse.ArgumentParser:
     p_sub.add_argument("--max-items", type=int, default=500, help="Maximum subscriptions to inspect.")
     p_sub.add_argument("--redact-pii", action="store_true", help="Mask customer names and emails.")
 
+    p_invr = sub.add_parser(
+        "invoice-radar",
+        parents=[common],
+        help="Scan B2B send_invoice receivables, overdue aging, draft orphans, custom-field limits, and Hosted Invoice readiness.",
+    )
+    p_invr.add_argument("--max-items", type=int, default=500, help="Maximum invoices to inspect (default: 500).")
+    p_invr.add_argument("--redact-pii", action="store_true", help="Mask customer names and emails.")
+    p_invr.add_argument("--now", type=int, help="Optional current Unix timestamp override for deterministic overdue calculations.")
+
+    p_invc = sub.add_parser(
+        "invoice-create",
+        parents=[common],
+        help="Preview-first create and finalize an orphan-free B2B Hosted Invoice (send_invoice) with custom fields and readback.",
+    )
+    p_invc.add_argument("--customer-id", help="Existing Stripe cus_... ID (omit to create customer via --customer-email).")
+    p_invc.add_argument("--customer-email", help="Customer billing email address when creating a new customer.")
+    p_invc.add_argument("--customer-name", help="Optional billing contact name.")
+    p_invc.add_argument("--company-name", help="Optional B2B legal company name.")
+    p_invc.add_argument("--amount-cents", type=int, required=True, help="Invoice amount in minor units (for example 102400 for $1,024.00).")
+    p_invc.add_argument("--currency", default="usd", help="3-letter ISO currency code (default: usd).")
+    p_invc.add_argument("--title", required=True, help="Primary line-item title.")
+    p_invc.add_argument("--description", help="Optional line-item scope description.")
+    p_invc.add_argument("--invoice-description", help="Optional top-level invoice memo/description (max 500 chars).")
+    p_invc.add_argument("--invoice-number-ref", help="Optional internal invoice reference (for example INV-2026-11-001).")
+    p_invc.add_argument("--days-until-due", type=int, default=14, help="Days until invoice is due (1..365, default: 14).")
+    p_invc.add_argument("--auto-advance", action="store_true", help="Enable Stripe auto_advance collection reminders after finalization.")
+    p_invc.add_argument("--footer", help="Optional invoice footer note (max 500 chars).")
+    p_invc.add_argument(
+        "--custom-field",
+        action="append",
+        default=[],
+        help="Repeatable NAME=VALUE custom field pair (max 4 fields, 30 chars each).",
+    )
+    p_invc.add_argument("--apply", action="store_true", help="Execute the 4-step B2B invoice creation and finalization.")
+    p_invc.add_argument("--confirm-plan", help="Required SHA-256 plan digest from preview.")
+    p_invc.add_argument("--live", action="store_true", help="Required safety flag when mutating a live Stripe account.")
+
+    p_invv = sub.add_parser(
+        "invoice-void",
+        parents=[common],
+        help="Preview-first void an open Stripe invoice with readback verification.",
+    )
+    p_invv.add_argument("--invoice-id", required=True, help="Target open Stripe invoice ID (in_...).")
+    p_invv.add_argument("--apply", action="store_true", help="Execute the invoice void operation.")
+    p_invv.add_argument("--confirm-plan", help="Required SHA-256 plan digest from preview.")
+    p_invv.add_argument("--live", action="store_true", help="Required safety flag when mutating a live Stripe account.")
+
     p_waud = sub.add_parser(
         "webhook-audit",
         parents=[common],
@@ -375,7 +428,10 @@ def build_parser() -> argparse.ArgumentParser:
         parents=[common],
         help="Inspect or output drop-in Astro v7, Node.js, or Python Stripe integration blueprints.",
     )
-    p_bp.add_argument("--name", help="Blueprint name: astro-checkout, astro-webhook, astro-portal, or python-webhook.")
+    p_bp.add_argument(
+        "--name",
+        help="Blueprint name: astro-checkout, astro-webhook, astro-portal, astro-b2b-invoice, or python-webhook.",
+    )
     p_bp.add_argument("--list", action="store_true", help="List available blueprints.")
     p_bp.add_argument("--raw", action="store_true", help="Print only the raw source code of the selected blueprint.")
     p_bp.add_argument("--output", help="Optional file path to write the blueprint code.")
@@ -515,6 +571,46 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "subscription-radar":
             client = _make_client(args)
             out = scan_subscription_radar(client, max_items=args.max_items, redact_pii=args.redact_pii)
+        elif args.command == "invoice-radar":
+            client = _make_client(args)
+            out = scan_invoice_radar(
+                client,
+                max_items=args.max_items,
+                redact_pii=args.redact_pii,
+                now_timestamp=args.now,
+            )
+        elif args.command == "invoice-create":
+            client = _make_client(args)
+            cfields = parse_custom_field_specs(args.custom_field)
+            out = create_b2b_invoice(
+                client,
+                customer_id=args.customer_id,
+                customer_email=args.customer_email,
+                customer_name=args.customer_name,
+                company_name=args.company_name,
+                amount_cents=args.amount_cents,
+                currency=args.currency,
+                title=args.title,
+                description=args.description,
+                invoice_description=args.invoice_description,
+                invoice_number_ref=args.invoice_number_ref,
+                days_until_due=args.days_until_due,
+                auto_advance=args.auto_advance,
+                footer=args.footer,
+                custom_fields=cfields,
+                apply=args.apply,
+                confirm_plan=args.confirm_plan,
+                allow_live=args.live,
+            )
+        elif args.command == "invoice-void":
+            client = _make_client(args)
+            out = void_b2b_invoice(
+                client,
+                invoice_id=args.invoice_id,
+                apply=args.apply,
+                confirm_plan=args.confirm_plan,
+                allow_live=args.live,
+            )
         elif args.command == "webhook-audit":
             client = _make_client(args)
             out = audit_webhooks(client, expected_url=args.expected_url)

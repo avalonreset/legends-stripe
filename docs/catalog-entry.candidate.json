@@ -2,11 +2,12 @@
   "id": "legends-stripe",
   "name": "Legends Stripe",
   "repo": "avalonreset/legends-stripe",
-  "version": "0.1.2",
-  "summary": "Operate Stripe payment infrastructure, catalog governance, price ladders, .env price auditing, treasury telemetry, and webhook fortification.",
+  "version": "0.1.3",
+  "summary": "Operate Stripe payment infrastructure, catalog governance, price ladders, .env price auditing, B2B Hosted Invoicing, treasury telemetry, and webhook fortification.",
   "domains": [
     "payments",
     "billing",
+    "invoicing",
     "stripe",
     "treasury",
     "webhooks",
@@ -16,6 +17,7 @@
     "Audit Stripe Products, Prices, and .env price_1.../prod_... variables across Test Mode and Live Mode",
     "Reconcile Stripe account balance, Gross Revenue, Stripe Drag fees, and Net Retained Cash to the cent",
     "Generate and sync idempotent Stripe price ladders and product catalogs with preview-first SHA-256 plan hashes",
+    "Issue orphan-free B2B Hosted Invoices (send_invoice), scan open receivables and overdue aging, and validate 30-char custom_fields limits",
     "Audit and fortify Stripe webhook endpoints for the 5-event Soft-Land Subscription Lifecycle and raw-body HMAC-SHA256 verification",
     "Verify disposable zero-charge Checkout Session canaries, subscription MRR, dunning queues, double-billed customers, and custom payment domains"
   ],
@@ -23,6 +25,7 @@
     "Audit my .env file against Stripe and tell me if any price IDs or keys are mismatched",
     "Reconcile our Stripe balance, gross revenue, and Stripe fee drag",
     "Check our Stripe products and prices for orphaned prices or description length issues",
+    "Issue a B2B Hosted Invoice or scan open B2B receivables and overdue aging",
     "Verify our Stripe webhook endpoint and test Stripe-Signature HMAC verification",
     "Scan Stripe subscriptions for MRR, past-due dunning, and double-billed customers"
   ],

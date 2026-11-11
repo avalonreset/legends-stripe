@@ -226,6 +226,140 @@ export const POST: APIRoute = async ({ request, url }) => {
 };
 """,
     },
+    "astro-b2b-invoice": {
+        "target_path": "src/pages/api/stripe/b2b-invoice.ts",
+        "runtime": "Astro v7 Server Endpoint (TypeScript, zero SDK dependency)",
+        "description": "Issues authenticated orphan-free B2B Hosted Invoices (send_invoice) with 4x30-char custom_fields guardrails.",
+        "code": """export const prerender = false;
+
+import type { APIRoute } from "astro";
+import crypto from "node:crypto";
+
+const STRIPE_API = "https://api.stripe.com/v1";
+const EMAIL_RE = /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/;
+const SECRET_SCRUB_RE = /\\b(?:sk_live_|sk_test_|rk_live_|rk_test_|whsec_)[A-Za-z0-9_]+/g;
+
+function verifyBearerToken(authHeader: string | null, expectedToken: string): boolean {
+  if (!authHeader || !authHeader.startsWith("Bearer ") || !expectedToken) return false;
+  const presented = Buffer.from(authHeader.slice(7).trim(), "utf8");
+  const expected = Buffer.from(expectedToken, "utf8");
+  return presented.length === expected.length && crypto.timingSafeEqual(presented, expected);
+}
+
+async function postStripeForm(secretKey: string, path: string, pairs: Array<[string, string]>) {
+  const body = new URLSearchParams(pairs).toString();
+  const res = await fetch(`${STRIPE_API}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.error?.message || `Stripe HTTP ${res.status}`);
+  }
+  return data;
+}
+
+export const POST: APIRoute = async ({ request }) => {
+  const secretKey = process.env.STRIPE_SECRET_KEY || import.meta.env.STRIPE_SECRET_KEY || "";
+  const adminToken = (process.env.STRIPE_B2B_INVOICE_TOKEN || import.meta.env.STRIPE_B2B_INVOICE_TOKEN || "").trim();
+  if ((!secretKey.startsWith("sk_") && !secretKey.startsWith("rk_")) || !adminToken) {
+    return new Response(JSON.stringify({ ok: false, error: "stripe_b2b_invoice_not_configured" }), { status: 500 });
+  }
+  if (!verifyBearerToken(request.headers.get("authorization"), adminToken)) {
+    return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), { status: 401 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const companyName = String(body.company_name || "").trim().slice(0, 140);
+  const email = String(body.email || "").trim().toLowerCase();
+  const invoiceRef = String(body.invoice_reference || "INV-B2B-001").trim().slice(0, 30).trim();
+  const amountCents = Math.round(Number(body.amount_cents));
+  const rawDays = body.days_until_due === undefined || body.days_until_due === null ? 14 : Number(body.days_until_due);
+  const daysUntilDue = Math.round(rawDays);
+  const itemDescription = String(
+    body.description || "Completed Technical Advisory & Engineering Services (rendered in full prior to issuance)"
+  )
+    .trim()
+    .slice(0, 500);
+
+  if (
+    !companyName ||
+    !invoiceRef ||
+    email.length > 254 ||
+    !EMAIL_RE.test(email) ||
+    !Number.isInteger(amountCents) ||
+    amountCents <= 0 ||
+    amountCents > 99_999_999 ||
+    !Number.isInteger(daysUntilDue) ||
+    daysUntilDue < 1 ||
+    daysUntilDue > 365
+  ) {
+    return new Response(JSON.stringify({ ok: false, error: "invalid_b2b_invoice_parameters" }), { status: 400 });
+  }
+
+  try {
+    // 1. Create Customer
+    const customer = await postStripeForm(secretKey, "/customers", [
+      ["name", companyName],
+      ["email", email],
+      ["metadata[company_name]", companyName],
+      ["metadata[invoice_reference]", invoiceRef],
+    ]);
+
+    // 2. Create Draft send_invoice (enforce 4-field x 30-char Stripe custom_fields limit)
+    const draft = await postStripeForm(secretKey, "/invoices", [
+      ["customer", customer.id],
+      ["collection_method", "send_invoice"],
+      ["days_until_due", String(daysUntilDue)],
+      ["auto_advance", "false"],
+      ["description", `Invoice ${invoiceRef} - ${companyName}`.slice(0, 500)],
+      ["custom_fields[0][name]", "Invoice Reference"],
+      ["custom_fields[0][value]", invoiceRef.slice(0, 30)],
+      ["custom_fields[1][name]", "Client Entity"],
+      ["custom_fields[1][value]", companyName.slice(0, 30)],
+      ["metadata[invoice_reference]", invoiceRef],
+    ]);
+
+    // 3. Bind InvoiceItem explicitly to draft.id (prevents orphaned pending invoice items)
+    await postStripeForm(secretKey, "/invoiceitems", [
+      ["customer", customer.id],
+      ["invoice", draft.id],
+      ["amount", String(amountCents)],
+      ["currency", "usd"],
+      ["description", itemDescription],
+    ]);
+
+    // 4. Finalize with auto_advance=false and return Hosted Invoice URL + PDF
+    const finalized = await postStripeForm(secretKey, `/invoices/${encodeURIComponent(draft.id)}/finalize`, [
+      ["auto_advance", "false"],
+    ]);
+
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        customer_id: customer.id,
+        invoice_id: finalized.id,
+        number: finalized.number,
+        status: finalized.status,
+        hosted_invoice_url: finalized.hosted_invoice_url,
+        invoice_pdf: finalized.invoice_pdf,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  } catch (err) {
+    const rawMsg = err instanceof Error ? err.message : "b2b_invoice_failed";
+    return new Response(
+      JSON.stringify({ ok: false, error: rawMsg.replace(SECRET_SCRUB_RE, "[REDACTED_STRIPE_SECRET]") }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
+};
+""",
+    },
     "python-webhook": {
         "target_path": "stripe_webhook_handler.py",
         "runtime": "Python 3.11+ Standard Library",

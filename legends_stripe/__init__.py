@@ -1,6 +1,6 @@
-"""legends-stripe: portable Stripe payments, catalog governance, treasury telemetry, and webhook fortification CLI."""
+"""legends-stripe: portable Stripe payments, catalog governance, B2B invoicing, treasury telemetry, and webhook fortification CLI."""
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 from .api import StripeClient, StripeError, classify_key, classify_stripe_key, load_dotenv_file, scrub_secrets
 from .blueprints import get_blueprint, list_blueprints
@@ -14,6 +14,13 @@ from .catalog import (
     upsert_product,
 )
 from .env_tools import audit_env_file, build_price_map
+from .invoices import (
+    create_b2b_invoice,
+    scan_invoice_radar,
+    validate_b2b_invoice_fields,
+    validate_invoice_custom_fields,
+    void_b2b_invoice,
+)
 from .subscriptions import scan_subscription_radar
 from .telemetry import build_treasury_telemetry, render_telemetry_markdown
 from .webhooks import (
@@ -45,6 +52,11 @@ __all__ = [
     "upsert_product",
     "run_checkout_canary",
     "scan_subscription_radar",
+    "scan_invoice_radar",
+    "create_b2b_invoice",
+    "void_b2b_invoice",
+    "validate_invoice_custom_fields",
+    "validate_b2b_invoice_fields",
     "audit_webhooks",
     "upsert_webhook_endpoint",
     "probe_unsigned_webhook_gate",

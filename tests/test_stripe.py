@@ -34,6 +34,14 @@ from legends_stripe.catalog import (
 )
 from legends_stripe.cli import main as cli_main
 from legends_stripe.env_tools import audit_env_file, build_price_map
+from legends_stripe.invoices import (
+    create_b2b_invoice,
+    parse_custom_field_specs,
+    scan_invoice_radar,
+    validate_b2b_invoice_fields,
+    validate_invoice_custom_fields,
+    void_b2b_invoice,
+)
 from legends_stripe.resources import resolve as resolve_resources, status as resources_status
 from legends_stripe.subscriptions import scan_subscription_radar
 from legends_stripe.telemetry import build_treasury_telemetry, render_telemetry_markdown
@@ -445,7 +453,7 @@ class ResourcesAndReleaseHygieneTests(unittest.TestCase):
         self.assertEqual(resources_status()["status"], "available")
 
         bps = list_blueprints()["blueprints"]
-        self.assertEqual(len(bps), 4)
+        self.assertEqual(len(bps), 5)
         for bp in bps:
             code = get_blueprint(bp["name"])["code"]
             self.assertTrue(len(code) > 100)
@@ -515,6 +523,169 @@ class ResourcesAndReleaseHygieneTests(unittest.TestCase):
         self.assertEqual(res_rot["transition"], "activate")
         with self.assertRaises(ValueError):
             classify_fn(raw_body, "t=not_an_int,v1=deadbeef", "whsec_new_key")
+
+    def test_b2b_invoice_radar_create_void_and_blueprint(self) -> None:
+        # 1. Custom field validation (max 4 fields, max 30 chars each, no padded overflow or extra keys)
+        self.assertEqual(
+            validate_invoice_custom_fields([{"name": "Invoice Reference", "value": "INV-2026-11-001"}]),
+            [],
+        )
+        self.assertTrue(
+            validate_invoice_custom_fields([{"name": "X" * 31, "value": "OK"}]),
+        )
+        self.assertTrue(
+            validate_invoice_custom_fields([{"name": "  " + ("A" * 29), "value": "OK"}]),
+        )
+        self.assertTrue(
+            validate_invoice_custom_fields([{"name": "OK", "value": "OK", "extra": "bad"}]),
+        )
+        self.assertTrue(
+            validate_invoice_custom_fields([{"name": f"F{i}", "value": "V"} for i in range(5)]),
+        )
+        parsed = parse_custom_field_specs(["Client VAT=DE123456789", "PO Number=PO-99"])
+        self.assertEqual(len(parsed), 2)
+        self.assertEqual(parsed[0]["name"], "Client VAT")
+
+        # 2. Invoice radar (open send_invoice overdue vs paid vs draft + scheduled payments governance)
+        radar_client = FakeStripeClient(
+            responses={
+                "/v1/invoices": [
+                    {
+                        "id": "in_open_b2b",
+                        "number": "INV-001",
+                        "status": "open",
+                        "collection_method": "send_invoice",
+                        "subscription": None,
+                        "customer": {"id": "cus_b2b1", "name": "Acme GmbH", "email": "ap@acme.example"},
+                        "currency": "usd",
+                        "amount_due": 102400,
+                        "amount_paid": 0,
+                        "amount_remaining": 102400,
+                        "created": 1700000000,
+                        "due_date": 1700086400,
+                        "hosted_invoice_url": "https://invoice.stripe.com/i/acct_1/test_1",
+                        "invoice_pdf": "https://pay.stripe.com/invoice/acct_1/test_1/pdf",
+                        "custom_fields": [{"name": "Invoice Reference", "value": "INV-2026-11-001"}],
+                    },
+                    {
+                        "id": "in_paid_sub",
+                        "number": "SUB-002",
+                        "status": "paid",
+                        "collection_method": "charge_automatically",
+                        "subscription": "sub_123",
+                        "customer": "cus_sub1",
+                        "currency": "usd",
+                        "amount_due": 6400,
+                        "amount_paid": 6400,
+                        "amount_remaining": 0,
+                        "created": 1700000000,
+                    },
+                    {
+                        "id": "in_draft_orphan",
+                        "status": "draft",
+                        "collection_method": "send_invoice",
+                        "subscription": None,
+                        "customer": "cus_b2b1",
+                        "currency": "usd",
+                        "amount_due": 50000,
+                        "amount_paid": 0,
+                        "amount_remaining": 50000,
+                        "created": 1700000000,
+                    },
+                ]
+            }
+        )
+        radar = scan_invoice_radar(radar_client, redact_pii=True, now_timestamp=1700259200)
+        self.assertTrue(radar["ok"])
+        self.assertEqual(radar["summary"]["standalone_b2b_count"], 2)
+        self.assertEqual(radar["summary"]["subscription_invoice_count"], 1)
+        self.assertEqual(radar["summary"]["open_hosted_invoices_count"], 1)
+        self.assertEqual(radar["summary"]["overdue_invoices_count"], 1)
+        self.assertEqual(radar["summary"]["draft_invoices_count"], 1)
+        self.assertEqual(radar["open_hosted_invoices"][0]["days_overdue"], 2)
+        self.assertIn("***", radar["open_hosted_invoices"][0]["customer_email"])
+        self.assertFalse(radar["scheduled_payments_governance"]["emits_scheduling_webhook"])
+
+        # 3. Preview-first 4-step B2B invoice creation + bound invoiceitem
+        inv_client = FakeStripeClient(
+            responses={
+                ("POST", "/v1/customers"): {"id": "cus_newb2b"},
+                ("POST", "/v1/invoices"): {"id": "in_b2bdraft123", "status": "draft"},
+                ("POST", "/v1/invoiceitems"): {"id": "ii_bound123"},
+                ("POST", "/v1/invoices/in_b2bdraft123/finalize"): {"id": "in_b2bdraft123", "status": "open"},
+                ("GET", "/v1/invoices/in_b2bdraft123"): {
+                    "id": "in_b2bdraft123",
+                    "number": "B2B-2026-001",
+                    "status": "open",
+                    "collection_method": "send_invoice",
+                    "amount_due": 102400,
+                    "due_date": 1701200000,
+                    "hosted_invoice_url": "https://invoice.stripe.com/i/acct_1/b2b",
+                    "invoice_pdf": "https://pay.stripe.com/invoice/acct_1/b2b/pdf",
+                },
+            }
+        )
+        preview = create_b2b_invoice(
+            inv_client,
+            customer_email="billing@client.example",
+            company_name="Client Corp",
+            amount_cents=102400,
+            title="Completed Architecture Engagement",
+            invoice_number_ref="INV-2026-11-001",
+            custom_fields=[{"name": "Client VAT / Tax ID", "value": "CHE-123.456.789"}],
+            apply=False,
+        )
+        self.assertTrue(preview["preview"])
+        self.assertEqual(len(inv_client.calls), 0)
+        with self.assertRaises(StripeError):
+            create_b2b_invoice(
+                inv_client,
+                customer_email="billing@client.example",
+                company_name="Client Corp",
+                amount_cents=102400,
+                title="Completed Architecture Engagement",
+                invoice_number_ref="INV-2026-11-001",
+                custom_fields=[{"name": "Client VAT / Tax ID", "value": "CHE-123.456.789"}],
+                apply=True,
+                confirm_plan="bad_hash",
+            )
+        created = create_b2b_invoice(
+            inv_client,
+            customer_email="billing@client.example",
+            company_name="Client Corp",
+            amount_cents=102400,
+            title="Completed Architecture Engagement",
+            invoice_number_ref="INV-2026-11-001",
+            custom_fields=[{"name": "Client VAT / Tax ID", "value": "CHE-123.456.789"}],
+            apply=True,
+            confirm_plan=preview["plan_sha256"],
+        )
+        self.assertFalse(created["preview"])
+        self.assertEqual(created["invoice"]["status"], "open")
+        self.assertEqual(created["invoice"]["hosted_invoice_url"], "https://invoice.stripe.com/i/acct_1/b2b")
+        # Verify Step 3 explicitly bound invoice=in_b2bdraft123 on /v1/invoiceitems
+        ii_calls = [c for c in inv_client.calls if c[1] == "/v1/invoiceitems"]
+        self.assertEqual(len(ii_calls), 1)
+        self.assertEqual(ii_calls[0][2]["invoice"], "in_b2bdraft123")
+
+        # 4. Preview-first invoice-void
+        void_client = FakeStripeClient(
+            responses={
+                ("POST", "/v1/invoices/in_b2bdraft123/void"): {"id": "in_b2bdraft123", "status": "void"},
+                ("GET", "/v1/invoices/in_b2bdraft123"): {"id": "in_b2bdraft123", "number": "B2B-2026-001", "status": "void"},
+            }
+        )
+        v_prev = void_b2b_invoice(void_client, invoice_id="in_b2bdraft123", apply=False)
+        self.assertTrue(v_prev["preview"])
+        v_done = void_b2b_invoice(void_client, invoice_id="in_b2bdraft123", apply=True, confirm_plan=v_prev["plan_sha256"])
+        self.assertEqual(v_done["invoice"]["status"], "void")
+
+        # 5. Blueprint astro-b2b-invoice check
+        b2b_bp = get_blueprint("astro-b2b-invoice")
+        self.assertIn("collection_method", b2b_bp["code"])
+        self.assertIn("send_invoice", b2b_bp["code"])
+        self.assertIn("STRIPE_B2B_INVOICE_TOKEN", b2b_bp["code"])
+        self.assertIn("timingSafeEqual", b2b_bp["code"])
 
 
 if __name__ == "__main__":

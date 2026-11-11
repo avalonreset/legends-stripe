@@ -2,7 +2,7 @@
   "schema": "legends.knowledge-pack/v1",
   "id": "stripe",
   "module": "legends-stripe",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "entrypoint": "index.md",
   "files": [
     {
@@ -19,7 +19,11 @@
     },
     {
       "path": "index.md",
-      "sha256": "333abef6af4a4e21ccc7bacbe5641752b529928f7e8fc24e62112412de2157f6"
+      "sha256": "130bc14c362cf951f85136664c2445c5e3ab4f610adb61af3d061a84362d8542"
+    },
+    {
+      "path": "invoicing-and-b2b-settlement.md",
+      "sha256": "d14df2b52d62cad44cd4fae9ec44013ccbcace158720d6e046866b54a117657a"
     },
     {
       "path": "overview.md",
@@ -27,7 +31,7 @@
     },
     {
       "path": "sources.md",
-      "sha256": "2e5551e02eb5e34bb78ad8a8fc9a5ea7ad19a7d1eab913d449ffca24e2b25eb7"
+      "sha256": "19e9e8d94db928217f1ff7e6c0456fbb534f64eb78e75f4a1c8fb6e5a96accf9"
     },
     {
       "path": "subscriptions-and-dunning.md",

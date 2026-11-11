@@ -11,7 +11,7 @@ Read [the Stripe knowledge vault](../wiki/index.md). Choose the runbook matching
 1. Run `legends-stripe doctor` (or `cto-legends run legends-stripe -- doctor`). This is offline, free, and verifies Python 3.11+, local knowledge pack integrity, and Stripe key prefix classification (`sk_test_`, `sk_live_`, `rk_test_`, `rk_live_`).
 2. For authorized live reads or Test Mode work, ensure `STRIPE_SECRET_KEY` is supplied in the environment or via `--env-file <path>`. Never echo secret keys (`sk_`, `rk_`, `whsec_`) to terminal output or logs.
 3. Run `legends-stripe doctor --live` to verify connectivity against `GET /v1/account` and confirm whether the key operates in `test` or `live` mode.
-4. Mutating commands (`catalog-sync`, `product-upsert`, `webhook-upsert`) are preview-first and return a deterministic `plan_sha256` (`plan_id`). Applying requires `--apply --confirm-plan <sha256>`, and mutating a `live` account requires an explicit additional `--live` flag.
+4. Mutating commands (`catalog-sync`, `product-upsert`, `webhook-upsert`, `invoice-create`, `invoice-void`, `checkout-canary`) are preview-first and return a deterministic `plan_sha256` (`plan_id`). Applying requires `--apply --confirm-plan <sha256>`, and mutating a `live` account requires an explicit additional `--live` flag.
 
 | Goal | Command | Interpretation |
 |---|---|---|
@@ -29,12 +29,15 @@ Read [the Stripe knowledge vault](../wiki/index.md). Choose the runbook matching
 | Upsert / archive Product | `product-upsert --name NAME [--inactive]` | Preview-first Product create/update; `--inactive` cascades deactivation to child Prices |
 | Zero-charge Checkout test | `checkout-canary` | Creates a disposable Checkout Session, verifies URL, and immediately expires it |
 | Subscription & MRR radar | `subscription-radar [--redact-pii]` | Calculates MRR, lists `past_due` dunning, and detects double-billed customers |
+| B2B Invoice & A/R radar | `invoice-radar [--redact-pii]` | Scans B2B `send_invoice` receivables, overdue aging, draft orphans, and custom-field limits |
+| Issue B2B Hosted Invoice | `invoice-create --amount-cents N --title TITLE ...` | Preview-first 4-step orphan-free B2B Hosted Invoice (`send_invoice`) creation with readback |
+| Void open B2B Invoice | `invoice-void --invoice-id in_...` | Preview-first void of an open Stripe invoice with readback verification |
 | Audit webhook endpoints | `webhook-audit [--expected-url URL]` | Verifies the 5-event Soft-Land Subscription Lifecycle contract and flags duplicates |
 | Upsert webhook endpoint | `webhook-upsert --url URL [--apply --confirm-plan HASH]` | Preview-first webhook endpoint creation or update |
 | Probe unsigned gate | `webhook-probe --url URL` | Sends an unsigned `POST {}` to verify HTTP 400/401/403 rejection |
 | Sign / verify webhook | `sign-webhook` / `verify-webhook` | Offline HMAC-SHA256 `Stripe-Signature` generator and constant-time verifier |
 | Check custom domain DNS | `custom-domain-check --hostname HOST` | Checks public DoH CNAME (`hosted-checkout.stripecdn.com`), ACME TXT, and HTTPS |
-| Drop-in code blueprints | `blueprint --name astro-checkout\|astro-webhook\|astro-portal\|python-webhook` | Outputs production-ready server endpoints with raw-body signature verification |
+| Drop-in code blueprints | `blueprint --name astro-checkout\|astro-webhook\|astro-portal\|astro-b2b-invoice\|python-webhook` | Outputs production-ready server endpoints with raw-body signature verification |
 
 ## Optional knowledge pack
 

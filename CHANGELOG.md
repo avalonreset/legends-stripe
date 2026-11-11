@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3 (2026-11-11)
+
+- Added first-class B2B Hosted Invoicing lifecycle commands (`invoice-radar`, `invoice-create`, `invoice-void`) and Python exports (`scan_invoice_radar`, `create_b2b_invoice`, `void_b2b_invoice`, `validate_invoice_custom_fields`, `validate_b2b_invoice_fields`).
+- Enforced orphan-free 4-step B2B invoice creation (`Customer -> Draft send_invoice -> Bound InvoiceItem with invoice=draft.id -> Finalize + Readback`) locked by preview-first SHA-256 `plan_sha256` confirmation and per-step idempotency keys.
+- Added offline validation for Stripe Invoicing `custom_fields` (maximum 4 fields, 30 printable characters per `name` and `value`), 500-character invoice descriptions/footers, and `days_until_due` (`1..365`).
+- Added the `astro-b2b-invoice` server blueprint (`src/pages/api/stripe/b2b-invoice.ts`) and the `invoicing-and-b2b-settlement.md` knowledge vault runbook covering Hosted Invoice Page mechanics and Customer-Scheduled Invoice Payments governance.
+
 ## 0.1.2 (2026-11-10)
 
 - Made `checkout-canary` (`run_checkout_canary`) preview-by-default across Test and Live modes, requiring `--apply --confirm-plan <plan_sha256>` (plus `--live` on live keys) before creating or expiring a disposable Checkout Session.

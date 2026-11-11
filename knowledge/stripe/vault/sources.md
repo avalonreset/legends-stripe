@@ -25,3 +25,8 @@ All operational rules and schema validators in `legends-stripe` are grounded in 
    - https://docs.stripe.com/api/balance_transactions/object
    - https://docs.stripe.com/api/charges/object
    - https://docs.stripe.com/api/payouts/object
+7. **Stripe Invoicing, Hosted Invoice Page, and B2B Settlement**:
+   - https://docs.stripe.com/invoicing
+   - https://docs.stripe.com/api/invoices/object
+   - https://docs.stripe.com/api/invoiceitems/object
+   - https://docs.stripe.com/invoicing/hosted-invoice-page
