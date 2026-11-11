@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import ipaddress
 import json
 import os
 import re
 import shutil
 import socket
+import ssl
 import subprocess
 import sys
 import urllib.error
@@ -25,6 +27,7 @@ MAX_FILE_BYTES = 1024 * 1024
 MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 STRIPE_ID_RE = re.compile(r"^[a-z]{2,10}_[A-Za-z0-9_]{1,120}$")
 _SECRET_SCRUB_RE = re.compile(r"\b(?:sk_live_|sk_test_|rk_live_|rk_test_|whsec_)[A-Za-z0-9_]+")
+_CGNAT_NET = ipaddress.ip_network("100.64.0.0/10")
 
 SOFT_LAND_WEBHOOK_EVENTS = (
     "checkout.session.completed",
@@ -60,12 +63,56 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 def build_safe_opener() -> urllib.request.OpenerDirector:
-    """Build a urllib opener that refuses automatic HTTP redirects."""
-    return urllib.request.build_opener(_NoRedirectHandler())
+    """Build a urllib opener that refuses automatic HTTP redirects and ignores ambient proxy variables."""
+    return urllib.request.build_opener(
+        _NoRedirectHandler(),
+        urllib.request.ProxyHandler({}),
+    )
 
 
-def validate_public_https_host(hostname: str, *, resolve_dns: bool = True) -> str:
-    """Reject loopback, link-local, RFC1918 private, multicast, and internal hostnames/IPs (CWE-918 SSRF defense)."""
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """HTTPS connection that connects TCP to a pre-validated IP while preserving TLS SNI for hostname."""
+
+    def __init__(self, host: str, *, connect_ip: str, **kwargs: Any) -> None:
+        super().__init__(host, **kwargs)
+        self._connect_ip = connect_ip
+
+    def connect(self) -> None:
+        raw_sock = socket.create_connection((self._connect_ip, self.port or 443), self.timeout, self.source_address)
+        if self._tunnel_host:
+            self.sock = raw_sock
+            self._tunnel()
+        server_host = self._tunnel_host if self._tunnel_host else self.host
+        ctx = self._context if hasattr(self, "_context") and self._context is not None else ssl.create_default_context()
+        self.sock = ctx.wrap_socket(raw_sock, server_hostname=server_host)
+
+
+class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    def __init__(self, connect_ip: str, context: ssl.SSLContext | None = None) -> None:
+        super().__init__(context=context)
+        self._connect_ip = connect_ip
+
+    def https_open(self, req: urllib.request.Request):
+        return self.do_open(
+            lambda host, **kw: _PinnedHTTPSConnection(host, connect_ip=self._connect_ip, **kw),
+            req,
+            context=self._context,
+        )
+
+
+def build_pinned_https_opener(connect_ip: str | None = None) -> urllib.request.OpenerDirector:
+    """Build an HTTPS opener pinned to a validated IP address to prevent DNS rebinding (CWE-918)."""
+    handlers: list[urllib.request.BaseHandler] = [
+        _NoRedirectHandler(),
+        urllib.request.ProxyHandler({}),
+    ]
+    if connect_ip:
+        handlers.append(_PinnedHTTPSHandler(connect_ip, context=ssl.create_default_context()))
+    return urllib.request.build_opener(*handlers)
+
+
+def resolve_public_https_host(hostname: str, *, resolve_dns: bool = True) -> tuple[str, list[str]]:
+    """Reject loopback, link-local, RFC1918, CGNAT, multicast, and internal hostnames/IPs, failing closed on DNS errors."""
     host = (hostname or "").strip().lower().rstrip(".")
     if not host or "/" in host or "@" in host or ":" in host or " " in host:
         raise StripeError(f"Invalid target hostname: {hostname!r}")
@@ -74,6 +121,8 @@ def validate_public_https_host(hostname: str, *, resolve_dns: bool = True) -> st
 
     def _check_ip(ip_str: str) -> None:
         addr = ipaddress.ip_address(ip_str)
+        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
+            addr = addr.ipv4_mapped
         if (
             addr.is_private
             or addr.is_loopback
@@ -81,35 +130,57 @@ def validate_public_https_host(hostname: str, *, resolve_dns: bool = True) -> st
             or addr.is_multicast
             or addr.is_reserved
             or addr.is_unspecified
+            or (isinstance(addr, ipaddress.IPv4Address) and addr in _CGNAT_NET)
+            or not addr.is_global
         ):
             raise StripeError(f"Refusing non-public IP address target: {ip_str}")
 
     try:
         _check_ip(host)
-        return host
+        return host, [host]
     except ValueError:
         pass
 
+    resolved_ips: list[str] = []
     if resolve_dns:
         try:
             infos = socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
-        except socket.gaierror:
-            return host
+        except socket.gaierror as exc:
+            raise StripeError(f"DNS resolution failed for target host '{host}': {exc}") from exc
+        if not infos:
+            raise StripeError(f"DNS resolution returned no addresses for target host '{host}'")
         for family, _, _, _, sockaddr in infos:
             if family in (socket.AF_INET, socket.AF_INET6) and sockaddr:
-                _check_ip(str(sockaddr[0]))
+                ip_val = str(sockaddr[0])
+                _check_ip(ip_val)
+                if ip_val not in resolved_ips:
+                    resolved_ips.append(ip_val)
+    return host, resolved_ips
+
+
+def validate_public_https_host(hostname: str, *, resolve_dns: bool = True) -> str:
+    """Reject loopback, link-local, RFC1918 private, CGNAT, multicast, and internal hostnames/IPs (CWE-918 SSRF defense)."""
+    host, _ = resolve_public_https_host(hostname, resolve_dns=resolve_dns)
     return host
 
 
-_MACOS_SYSTEM_SYMLINKS = {Path("/var"), Path("/tmp"), Path("/etc")}
+_MACOS_SYSTEM_SYMLINKS = {
+    Path("/var"),
+    Path("/tmp"),
+    Path("/etc"),
+    Path("/private/var"),
+    Path("/private/tmp"),
+    Path("/private/etc"),
+}
 
 
 def _reject_symlink_chain(path: Path) -> None:
     """Refuse symlinks on the target path or any non-system parent directory (CWE-59)."""
-    if path.is_symlink():
-        raise StripeError(f"Refusing to operate on symlink path: {path}")
-    for parent in path.parents:
-        if parent in _MACOS_SYSTEM_SYMLINKS:
+    raw = Path(path).expanduser()
+    if raw.is_symlink():
+        raise StripeError(f"Refusing to operate on symlink path: {raw}")
+    for parent in raw.absolute().parents:
+        if sys.platform == "darwin" and parent in _MACOS_SYSTEM_SYMLINKS:
             continue
         if parent.is_symlink():
             raise StripeError(f"Refusing to traverse symlinked directory: {parent}")

@@ -459,6 +459,63 @@ class ResourcesAndReleaseHygieneTests(unittest.TestCase):
 
         self.assertEqual(check_release(), [])
 
+    def test_security_hardening_canary_preview_argv_secrets_ssrf_and_blueprints(self) -> None:
+        import socket
+
+        # 1. checkout-canary preview-first + confirm_plan gate (STR-P1-02)
+        client = FakeStripeClient(
+            responses={
+                ("POST", "/v1/checkout/sessions"): {"id": "cs_test_123", "status": "open", "url": "https://checkout.stripe.com/c/pay/cs_test_123"},
+                ("GET", "/v1/checkout/sessions/cs_test_123"): {"id": "cs_test_123", "status": "open", "url": "https://checkout.stripe.com/c/pay/cs_test_123", "amount_total": 100, "currency": "usd", "livemode": False},
+                ("POST", "/v1/checkout/sessions/cs_test_123/expire"): {"id": "cs_test_123", "status": "expired"},
+            }
+        )
+        preview = run_checkout_canary(client, amount_cents=100, apply=False)
+        self.assertTrue(preview["preview"])
+        self.assertEqual(len(client.calls), 0)
+        with self.assertRaises(StripeError):
+            run_checkout_canary(client, amount_cents=100, apply=True, confirm_plan="wrong")
+        applied = run_checkout_canary(client, amount_cents=100, apply=True, confirm_plan=preview["plan_sha256"])
+        self.assertFalse(applied["preview"])
+        self.assertTrue(applied["cleaned_up"])
+
+        # 2. CWE-214 CLI argv raw secret rejection (STR-P1-03)
+        buf = io.StringIO()
+        with patch("sys.stdout", buf):
+            rc_bad = cli_main(["sign-webhook", "--payload", "{}", "--secret", "whsec_raw_arg"])
+        self.assertEqual(rc_bad, 1)
+        self.assertIn("CWE-214", buf.getvalue())
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sec_file = Path(tmp) / "whsec.txt"
+            sec_file.write_text("whsec_file_secret\n", encoding="utf-8")
+            buf2 = io.StringIO()
+            with patch("sys.stdout", buf2):
+                rc_ok = cli_main(["sign-webhook", "--payload", "{}", "--secret", f"@{sec_file}"])
+            self.assertEqual(rc_ok, 0)
+
+        # 3. CWE-918 DNS fail-closed and CGNAT rejection (STR-P2-01)
+        with self.assertRaises(StripeError):
+            validate_public_https_host("100.64.0.1", resolve_dns=False)
+        with patch("socket.getaddrinfo", side_effect=socket.gaierror("NXDOMAIN")):
+            with self.assertRaises(StripeError):
+                validate_public_https_host("unresolvable.example.invalid", resolve_dns=True)
+
+        # 4. Blueprints: python-webhook multiple v1 rotation + malformed t, astro-portal sk_/rk_ check (STR-P2-02)
+        portal_code = get_blueprint("astro-portal")["code"]
+        self.assertIn('secretKey.startsWith("sk_")', portal_code)
+        py_code = get_blueprint("python-webhook")["code"]
+        ns: dict = {}
+        exec(py_code, ns)
+        classify_fn = ns["classify_soft_land_event"]
+        raw_body = b'{"id":"evt_rot","type":"invoice.paid","data":{"object":{"status":"paid"}}}'
+        signed = sign_stripe_webhook_payload(raw_body, "whsec_new_key")
+        multi_sig = f"t={signed['timestamp']},v1=deadbeef,v1={signed['v1']}"
+        res_rot = classify_fn(raw_body, multi_sig, "whsec_new_key")
+        self.assertEqual(res_rot["transition"], "activate")
+        with self.assertRaises(ValueError):
+            classify_fn(raw_body, "t=not_an_int,v1=deadbeef", "whsec_new_key")
+
 
 if __name__ == "__main__":
     unittest.main()

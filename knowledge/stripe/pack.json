@@ -2,7 +2,7 @@
   "schema": "legends.knowledge-pack/v1",
   "id": "stripe",
   "module": "legends-stripe",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "entrypoint": "index.md",
   "files": [
     {
@@ -15,7 +15,7 @@
     },
     {
       "path": "checkout-and-custom-domains.md",
-      "sha256": "4e985156d7246d0ad762f3fdaa017be77e24fe8c64185671c228301583e78d9c"
+      "sha256": "185387ee85f9c31cf963cf8bff525de7cc8dc025c75b9d622f23b5f835539fd0"
     },
     {
       "path": "index.md",
@@ -55,7 +55,7 @@
     },
     {
       "path": "webhooks-and-soft-land-lifecycle.md",
-      "sha256": "3f16e2cec00a693e09954b1ae4ce49843ea02147090c1eeab26af36ccc2f4165"
+      "sha256": "6c9f4424da20b547e2d48703898bbcc3b52a9bbf070e088e62aeeb68eb74b6cc"
     }
   ],
   "ontology": {

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2 (2026-11-10)
+
+- Made `checkout-canary` (`run_checkout_canary`) preview-by-default across Test and Live modes, requiring `--apply --confirm-plan <plan_sha256>` (plus `--live` on live keys) before creating or expiring a disposable Checkout Session.
+- Hardened `sign-webhook` and `verify-webhook` (`_resolve_webhook_secret_arg`) to refuse raw `whsec_...` secret literals on CLI `argv` (CWE-214), accepting secrets via `STRIPE_WEBHOOK_SECRET`, `--secret @<file>`, `--secret-file <file>`, or `--secret-stdin`.
+- Hardened `validate_public_https_host`, `upsert_webhook_endpoint`, `probe_unsigned_webhook_gate`, and `check_custom_domain` with fail-closed DNS resolution, CGNAT (`100.64.0.0/10`) and non-global IP refusal, `ProxyHandler({})`, and pinned-IP TLS connections (CWE-918).
+- Updated `python-webhook` blueprint to evaluate all `v1=` signature headers during webhook secret rotation and handle malformed `t=` values cleanly, and added `sk_`/`rk_` key prefix validation to `astro-portal`.
+- Synced `README.md` subcommands (`catalog-export`, `product-upsert`) and Python API exports (`audit_env_file`, `build_price_map`, `build_treasury_telemetry`) with `legends_stripe/__init__.py`, restricted `_MACOS_SYSTEM_SYMLINKS` exemptions to `sys.platform == "darwin"`, and added `.legends-module`, `.legends-router-pin`, `setup.py`, control-char checks, and `whsec_` scanning to `MANIFEST.in` and `scripts/check_release.py`.
+
 ## 0.1.1 (2026-11-05)
 
 - Aligned `README.md` command tables and examples with CLI subcommand names (`subscription-radar`, `checkout-canary`, `webhook-upsert`, `verify-webhook --payload @event.json --signature`, and `--apply --confirm-plan <plan_hash> --live`).

@@ -29,8 +29,8 @@ Stripe signs webhook payloads using the endpoint's `whsec_...` secret:
 Test your signature verification offline without needing external network tunnels:
 
 ```bash
-legends-stripe sign-webhook --payload '{"id":"evt_test_1","type":"checkout.session.completed"}' --secret whsec_test_secret --timestamp 1762350000
-legends-stripe verify-webhook --payload '{"id":"evt_test_1","type":"checkout.session.completed"}' --signature "t=1762350000,v1=..." --secret whsec_test_secret --now 1762350050
+legends-stripe sign-webhook --payload '{"id":"evt_test_1","type":"checkout.session.completed"}' --secret @webhook-secret.txt --timestamp 1762350000
+legends-stripe verify-webhook --payload '{"id":"evt_test_1","type":"checkout.session.completed"}' --signature "t=1762350000,v1=..." --secret @webhook-secret.txt --now 1762350050
 ```
 
 ## Probing the Unsigned Webhook Gate (`webhook-probe`)

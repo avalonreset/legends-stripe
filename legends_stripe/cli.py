@@ -55,16 +55,31 @@ def _load_payload_arg(value: str) -> str:
 
 
 def _resolve_webhook_secret_arg(args: argparse.Namespace) -> str:
+    if getattr(args, "secret_stdin", False):
+        secret_stdin = sys.stdin.read().strip()
+        if not secret_stdin:
+            raise StripeError("--secret-stdin was specified, but stdin was empty.")
+        return secret_stdin
+    secret_file = getattr(args, "secret_file", None)
+    if secret_file:
+        _, text = safe_read_text_file(str(secret_file), label="webhook secret file")
+        return text.strip()
     raw = getattr(args, "secret", None)
     if raw:
         if str(raw).startswith("@"):
             _, text = safe_read_text_file(str(raw)[1:], label="webhook secret file")
             return text.strip()
-        return str(raw).strip()
+        raise StripeError(
+            "Refusing raw webhook signing secret on CLI argv (CWE-214). "
+            "Pass --secret @<file>, --secret-file <file>, --secret-stdin, or set STRIPE_WEBHOOK_SECRET in --env-file / environment."
+        )
     creds = resolve_credentials(getattr(args, "env_file", None))
     if creds.get("webhook_secret"):
         return str(creds["webhook_secret"]).strip()
-    raise StripeError("Missing webhook signing secret. Pass --secret whsec_... or set STRIPE_WEBHOOK_SECRET in the environment / --env-file.")
+    raise StripeError(
+        "Missing webhook signing secret. Pass --secret @<file>, --secret-file <file>, --secret-stdin, "
+        "or set STRIPE_WEBHOOK_SECRET in the environment / --env-file."
+    )
 
 
 def _make_client(args: argparse.Namespace, *, fallback_env: str | None = None) -> StripeClient:
@@ -279,12 +294,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_can = sub.add_parser(
         "checkout-canary",
         parents=[common],
-        help="Create a disposable zero-charge Checkout Session, verify hosted URL, and immediately expire it.",
+        help="Preview or run a disposable zero-charge Checkout Session canary (create, verify URL, and immediately expire).",
     )
     p_can.add_argument("--price-id", help="Optional existing price_... ID.")
     p_can.add_argument("--amount-cents", type=int, default=100, help="Canary amount in minor units if no --price-id (default: 100).")
     p_can.add_argument("--currency", default="usd", help="Currency code (default: usd).")
-    p_can.add_argument("--live", action="store_true", help="Allow running canary on a live key (creates and immediately expires an unpaid session).")
+    p_can.add_argument("--apply", action="store_true", help="Execute the disposable Checkout Session creation and expiration.")
+    p_can.add_argument("--confirm-plan", help="Required SHA-256 plan digest from preview when --apply is set.")
+    p_can.add_argument("--live", action="store_true", help="Allow running canary on a live key (requires --apply --confirm-plan).")
 
     p_sub = sub.add_parser(
         "subscription-radar",
@@ -313,6 +330,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_wups.add_argument("--apply", action="store_true", help="Execute the mutation.")
     p_wups.add_argument("--confirm-plan", help="Required SHA-256 plan digest from preview.")
     p_wups.add_argument("--live", action="store_true", help="Required safety flag when mutating a live Stripe account.")
+    p_wups.add_argument("--skip-dns-check", action="store_true", help="Skip DNS resolution check on webhook host in offline environments.")
 
     p_wprb = sub.add_parser(
         "webhook-probe",
@@ -327,7 +345,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generate a valid Stripe-Signature HMAC-SHA256 header for offline webhook testing.",
     )
     p_wsig.add_argument("--payload", required=True, help="Raw JSON payload string or @path/to/payload.json.")
-    p_wsig.add_argument("--secret", help="Webhook signing secret (whsec_... or @file; defaults to STRIPE_WEBHOOK_SECRET).")
+    p_wsig.add_argument("--secret", help="Path to webhook signing secret via @file (defaults to STRIPE_WEBHOOK_SECRET).")
+    p_wsig.add_argument("--secret-file", help="Path to file containing the webhook signing secret.")
+    p_wsig.add_argument("--secret-stdin", action="store_true", help="Read webhook signing secret from standard input.")
     p_wsig.add_argument("--timestamp", type=int, help="Optional Unix timestamp override.")
 
     p_wver = sub.add_parser(
@@ -337,7 +357,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_wver.add_argument("--payload", required=True, help="Raw JSON payload string or @path/to/payload.json.")
     p_wver.add_argument("--signature", required=True, help="Stripe-Signature header value (t=...,v1=...).")
-    p_wver.add_argument("--secret", help="Webhook signing secret (whsec_... or @file; defaults to STRIPE_WEBHOOK_SECRET).")
+    p_wver.add_argument("--secret", help="Path to webhook signing secret via @file (defaults to STRIPE_WEBHOOK_SECRET).")
+    p_wver.add_argument("--secret-file", help="Path to file containing the webhook signing secret.")
+    p_wver.add_argument("--secret-stdin", action="store_true", help="Read webhook signing secret from standard input.")
     p_wver.add_argument("--tolerance", type=int, default=300, help="Timestamp replay tolerance in seconds (default: 300).")
     p_wver.add_argument("--now", type=int, help="Optional current Unix timestamp override for deterministic tests.")
 
@@ -486,6 +508,8 @@ def main(argv: list[str] | None = None) -> int:
                 price_id=args.price_id,
                 amount_cents=args.amount_cents,
                 currency=args.currency,
+                apply=args.apply,
+                confirm_plan=args.confirm_plan,
                 allow_live=args.live,
             )
         elif args.command == "subscription-radar":
@@ -506,6 +530,7 @@ def main(argv: list[str] | None = None) -> int:
                 apply=args.apply,
                 confirm_plan=args.confirm_plan,
                 allow_live=args.live,
+                skip_dns_check=args.skip_dns_check,
             )
         elif args.command == "webhook-probe":
             out = probe_unsigned_webhook_gate(args.url)

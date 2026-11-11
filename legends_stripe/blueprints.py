@@ -179,6 +179,9 @@ import type { APIRoute } from "astro";
 
 export const POST: APIRoute = async ({ request, url }) => {
   const secretKey = process.env.STRIPE_SECRET_KEY || import.meta.env.STRIPE_SECRET_KEY || "";
+  if (!secretKey.startsWith("sk_") && !secretKey.startsWith("rk_")) {
+    return new Response(JSON.stringify({ ok: false, error: "stripe_not_configured" }), { status: 500 });
+  }
   const body = await request.json().catch(() => ({}));
   const customerId = String(body.customer_id || "").trim();
   if (!/^cus_[A-Za-z0-9_]+$/.test(customerId)) {
@@ -234,14 +237,24 @@ import time
 
 
 def classify_soft_land_event(raw_body: bytes, sig_header: str, webhook_secret: str, tolerance: int = 300) -> dict:
-    parts = dict(item.strip().split("=", 1) for item in sig_header.split(",") if "=" in item)
-    ts = int(parts.get("t", "0"))
-    v1 = parts.get("v1", "")
-    if not ts or not v1 or abs(int(time.time()) - ts) > tolerance:
+    ts = 0
+    v1_sigs: list[str] = []
+    for item in (sig_header or "").split(","):
+        if "=" not in item:
+            continue
+        k, v = item.strip().split("=", 1)
+        if k == "t":
+            try:
+                ts = int(v)
+            except ValueError as exc:
+                raise ValueError("Invalid Stripe-Signature timestamp") from exc
+        elif k == "v1" and v:
+            v1_sigs.append(v)
+    if not ts or not v1_sigs or abs(int(time.time()) - ts) > tolerance:
         raise ValueError("Invalid or expired Stripe-Signature timestamp")
     signed = f"{ts}.{raw_body.decode('utf-8')}".encode("utf-8")
     expected = hmac.new(webhook_secret.encode("utf-8"), signed, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(expected, v1):
+    if not any(hmac.compare_digest(expected, cand) for cand in v1_sigs):
         raise ValueError("Stripe-Signature HMAC mismatch")
     event = json.loads(raw_body.decode("utf-8"))
     etype = event.get("type", "")

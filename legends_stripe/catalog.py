@@ -598,10 +598,11 @@ def run_checkout_canary(
     amount_cents: int = 100,
     currency: str = "usd",
     product_name: str = "Legends Stripe Canary Verification",
+    apply: bool = False,
+    confirm_plan: str | None = None,
     allow_live: bool = False,
 ) -> dict[str, Any]:
-    """Create a zero-charge disposable Checkout Session, verify its URL and state, and immediately expire it."""
-    client.require_mutation_gate(allow_live=allow_live)
+    """Preview or execute a zero-charge disposable Checkout Session canary (create, verify URL, and immediately expire)."""
     if price_id:
         price_id = validate_stripe_id(price_id, expected_prefix="price_", field_name="price_id")
         line_item: dict[str, Any] = {"price": price_id, "quantity": 1}
@@ -625,7 +626,37 @@ def run_checkout_canary(
         "cancel_url": "https://example.com/checkout/cancel",
         "metadata": {"legends_stripe_canary": "true"},
     }
-    created = client.request("POST", "/v1/checkout/sessions", params)
+    plan_obj = {
+        "mode": client.mode,
+        "price_id": price_id,
+        "amount_cents": amount_cents if not price_id else None,
+        "currency": currency.lower(),
+        "params": params,
+    }
+    digest = plan_digest("checkout-canary", plan_obj)
+
+    if not apply:
+        return {
+            "ok": True,
+            "preview": True,
+            "action": "checkout-canary",
+            "mode": client.mode,
+            "plan_id": digest,
+            "plan_sha256": digest,
+            "planned": plan_obj,
+            "next": f"Pass --apply --confirm-plan {digest}" + (" --live" if client.mode == "live" else ""),
+        }
+
+    client.require_mutation_gate(allow_live=allow_live)
+    if confirm_plan != digest:
+        raise StripeError(f"Confirmation hash mismatch: expected --confirm-plan {digest}, got {confirm_plan!r}.")
+
+    created = client.request(
+        "POST",
+        "/v1/checkout/sessions",
+        params,
+        idempotency_key=f"legends-stripe:checkout-canary:{digest[:32]}",
+    )
     session_id = created.get("id")
     if not session_id:
         raise StripeError("Stripe did not return a Checkout Session ID.")
@@ -635,7 +666,11 @@ def run_checkout_canary(
 
     return {
         "ok": True,
+        "preview": False,
+        "action": "checkout-canary",
         "mode": client.mode,
+        "plan_id": digest,
+        "plan_sha256": digest,
         "session_id": session_id,
         "created_status": readback_open.get("status"),
         "expired_status": expired.get("status"),

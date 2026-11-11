@@ -26,13 +26,13 @@ Install with `cto-legends install legends-stripe`, then follow the module recipe
 
 | Workflow | Included CLI / Python interface | What you get |
 | --- | --- | --- |
-| Environment & Stripe Price ID audit | `legends-stripe env-audit` / `audit_env_against_stripe()` | Cross-checks `.env` `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `price_1...`, and `prod_...` tokens against live or test Stripe mode |
-| Price map codegen | `legends-stripe price-map` / `export_price_map()` | Exports active Stripe Products and Prices as `.env`, JSON, or TypeScript `as const` lookup maps |
-| Stripe fee calculator & treasury telemetry | `legends-stripe telemetry` / `compute_treasury_telemetry()` | Cent-exact Gross Revenue, Stripe Drag fee percentage, Refunds, Disputes, Net Retained Cash, and 12-month projections |
-| Product catalog lint | `legends-stripe catalog-audit` / `audit_catalog()` | Flags 500-char description truncation, 22-char statement descriptor violations, and orphaned active Prices |
+| Environment & Stripe Price ID audit | `legends-stripe env-audit` / `audit_env_file()` | Cross-checks `.env` `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `price_1...`, and `prod_...` tokens against live or test Stripe mode |
+| Price map codegen | `legends-stripe price-map` / `build_price_map()` | Exports active Stripe Products and Prices as `.env`, JSON, or TypeScript `as const` lookup maps |
+| Stripe fee calculator & treasury telemetry | `legends-stripe telemetry` / `build_treasury_telemetry()` | Cent-exact Gross Revenue, Stripe Drag fee percentage, Refunds, Disputes, Revenue Streams, and Net Retained Cash |
+| Product catalog lint & export | `legends-stripe catalog-audit`, `catalog-export`, `product-upsert` / `audit_catalog()` | Flags 500-char description truncation, 22-char statement descriptor violations, orphaned active Prices, exports specs, and upserts/archives Products |
 | Declarative price ladder sync | `legends-stripe ladder-plan`, `catalog-diff`, `catalog-sync` | Generates exponential or custom price ladders, diffs against Stripe, and syncs with preview-first SHA-256 plan hashes |
 | Stripe Billing & subscription radar | `legends-stripe subscription-radar` / `scan_subscription_radar()` | Computes active MRR/ARR, past-due dunning recovery queues, cancel-at-period-end churn, and duplicate-billed customer alerts |
-| Stripe Checkout canary | `legends-stripe checkout-canary` / `run_checkout_canary()` | Creates and immediately expires a disposable zero-charge Stripe Checkout Session to prove end-to-end Price readiness |
+| Stripe Checkout canary | `legends-stripe checkout-canary` / `run_checkout_canary()` | Preview-first disposable zero-charge Stripe Checkout Session canary (`--apply --confirm-plan <sha256>`) to prove end-to-end Price readiness |
 | Stripe Webhook signature verification | `legends-stripe verify-webhook`, `sign-webhook`, `webhook-probe` | Constant-time `Stripe-Signature` (`t=...,v1=...`) HMAC-SHA256 verification, test header signing, and live endpoint probing |
 | Webhook lifecycle audit & bootstrap | `legends-stripe webhook-audit`, `webhook-upsert` | Audits endpoints against the 5-event Soft-Land Subscription Lifecycle and registers missing webhooks with preview-first locking |
 | Custom payment domain check | `legends-stripe custom-domain-check` / `check_custom_domain()` | DNS CNAME and HTTPS TLS readiness probe for white-labeled Stripe payment domains |
@@ -52,7 +52,7 @@ Developers and founders building on Astro, Next.js, or Python hit the same high-
 ## Install
 
 ```bash
-python -m pip install "https://github.com/avalonreset/legends-stripe/releases/download/v0.1.1/legends_stripe-0.1.1-py3-none-any.whl"
+python -m pip install "https://github.com/avalonreset/legends-stripe/releases/download/v0.1.2/legends_stripe-0.1.2-py3-none-any.whl"
 legends-stripe --version
 legends-stripe doctor
 ```
@@ -84,10 +84,12 @@ legends-stripe telemetry --redact-pii
 legends-stripe telemetry --markdown --redact-pii --output treasury-report.md
 ```
 
-### 3. Audit, plan, and sync product catalogs (`catalog-audit`, `ladder-plan`, `catalog-sync`)
+### 3. Audit, export, plan, and sync product catalogs (`catalog-audit`, `catalog-export`, `product-upsert`, `ladder-plan`, `catalog-sync`)
 
 ```bash
 legends-stripe catalog-audit
+legends-stripe catalog-export --prefix "SaaS Pro" --output exported-spec.json
+legends-stripe product-upsert --name "SaaS Pro" --statement-descriptor "SAAS PRO"
 legends-stripe ladder-plan --prefix "SaaS Pro" --amounts "19,49,99" --intervals "month,year" --statement-descriptor "SAAS PRO" --output spec.json
 legends-stripe catalog-diff --spec spec.json
 legends-stripe catalog-sync --spec spec.json
@@ -98,6 +100,7 @@ legends-stripe catalog-sync --spec spec.json
 ```bash
 legends-stripe subscription-radar --redact-pii
 legends-stripe checkout-canary --price-id price_1Example123
+legends-stripe checkout-canary --price-id price_1Example123 --apply --confirm-plan <plan_sha256>
 ```
 
 ### 5. Fortify Stripe Webhook signature verification and custom domains (`webhook-audit`, `webhook-probe`, `verify-webhook`)
@@ -105,7 +108,7 @@ legends-stripe checkout-canary --price-id price_1Example123
 ```bash
 legends-stripe webhook-audit --expected-url https://app.example.com/api/stripe/webhook
 legends-stripe webhook-probe --url https://app.example.com/api/stripe/webhook
-legends-stripe verify-webhook --payload @event.json --signature "t=1700000000,v1=..."
+legends-stripe verify-webhook --payload @event.json --signature "t=1700000000,v1=..." --secret @webhook-secret.txt
 legends-stripe custom-domain-check --hostname pay.example.com
 ```
 

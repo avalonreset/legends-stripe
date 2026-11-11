@@ -14,8 +14,10 @@ from .api import (
     SOFT_LAND_WEBHOOK_EVENTS,
     StripeClient,
     StripeError,
+    build_pinned_https_opener,
     build_safe_opener,
     plan_digest,
+    resolve_public_https_host,
     validate_public_https_host,
     validate_stripe_id,
 )
@@ -224,12 +226,13 @@ def upsert_webhook_endpoint(
     apply: bool = False,
     confirm_plan: str | None = None,
     allow_live: bool = False,
+    skip_dns_check: bool = False,
 ) -> dict[str, Any]:
     """Preview-first create or update a Stripe webhook endpoint without blind duplicate creation."""
     parsed = urllib.parse.urlparse(url.strip())
     if parsed.scheme != "https" or not parsed.hostname:
         raise StripeError("Webhook endpoint URL must be a valid https:// URL.")
-    validate_public_https_host(parsed.hostname, resolve_dns=False)
+    validate_public_https_host(parsed.hostname, resolve_dns=bool(apply and not skip_dns_check))
     if endpoint_id:
         endpoint_id = validate_stripe_id(endpoint_id, expected_prefix="we_", field_name="endpoint_id")
 
@@ -287,18 +290,18 @@ def probe_unsigned_webhook_gate(url: str, *, timeout: int = 15) -> dict[str, Any
     parsed = urllib.parse.urlparse(url.strip())
     if parsed.scheme != "https" or not parsed.hostname:
         raise StripeError("Probe URL must be a valid public https:// URL.")
-    validate_public_https_host(parsed.hostname, resolve_dns=True)
+    _, resolved_ips = resolve_public_https_host(parsed.hostname, resolve_dns=True)
 
     req = urllib.request.Request(
         url.strip(),
         data=b"{}",
         headers={
             "Content-Type": "application/json",
-            "User-Agent": "legends-stripe-webhook-gate-probe/0.1.0",
+            "User-Agent": "legends-stripe-webhook-gate-probe/0.1.2",
         },
         method="POST",
     )
-    opener = build_safe_opener()
+    opener = build_pinned_https_opener(resolved_ips[0] if resolved_ips else None)
     try:
         with opener.open(req, timeout=timeout) as resp:
             status = resp.status
@@ -369,9 +372,9 @@ def check_custom_domain(hostname: str) -> dict[str, Any]:
 
     https_status: int | None = None
     try:
-        validate_public_https_host(host, resolve_dns=True)
-        req = urllib.request.Request(f"https://{host}/", headers={"User-Agent": "legends-stripe/0.1.0"}, method="GET")
-        opener = build_safe_opener()
+        _, resolved_ips = resolve_public_https_host(host, resolve_dns=True)
+        req = urllib.request.Request(f"https://{host}/", headers={"User-Agent": "legends-stripe/0.1.2"}, method="GET")
+        opener = build_pinned_https_opener(resolved_ips[0] if resolved_ips else None)
         with opener.open(req, timeout=10) as resp:
             https_status = resp.status
     except urllib.error.HTTPError as exc:

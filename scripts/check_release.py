@@ -13,6 +13,9 @@ from urllib.parse import unquote
 ROOT = Path(__file__).resolve().parents[1]
 SKIP = {".git", ".venv", "dist", "build", "__pycache__", ".integration"}
 REQUIRED = [
+    ".legends-module",
+    ".legends-router-pin",
+    "setup.py",
     "README.md",
     "LICENSE",
     "NOTICE.md",
@@ -27,6 +30,7 @@ REQUIRED = [
     "docs/AGENT-RECIPE.md",
     "docs/KNOWLEDGE-PACK.md",
     "docs/RELEASE.md",
+    "docs/router-provenance.json",
     "templates/private-operation-receipt.md",
     "skills/cto-legends/SKILL.md",
     "knowledge/stripe/pack.json",
@@ -37,10 +41,12 @@ FORBIDDEN = [
     r"(?i)\.tail[a-z0-9]+\.ts\.net",
     r"(?i)sk_live_[a-z0-9]{12,}",
     r"(?i)rk_live_[a-z0-9]{12,}",
+    r"(?i)whsec_[A-Za-z0-9]{16,}",
     r"gh[pousr]_[A-Za-z0-9]{20,}",
     r"-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----",
     r"CREATE_NO_WINDOW",
     r"0x08000000",
+    r"(?i)windowsHide\s*:\s*true",
     r"(?i)-WindowStyle\s+Hidden",
     r"(?i)-ExecutionPolicy\s+Bypass",
     r"ctypes\.windll",
@@ -140,9 +146,11 @@ def check(root: Path = ROOT) -> list[str]:
         if path.suffix.lower() in {".png", ".webp"}:
             errors.extend(f"{rel}: {issue}" for issue in image_metadata_issues(path))
             continue
-        if path.suffix not in TEXT_SUFFIXES and path.name != "LICENSE":
+        if path.suffix not in TEXT_SUFFIXES and path.name not in {"LICENSE", ".legends-module", ".legends-router-pin"}:
             continue
         text = path.read_text(encoding="utf-8-sig")
+        if re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ufffd]", text):
+            errors.append(f"Control character or replacement character in text file: {rel}")
         if path.name != "check_release.py":
             for pattern in FORBIDDEN:
                 if re.search(pattern, text):

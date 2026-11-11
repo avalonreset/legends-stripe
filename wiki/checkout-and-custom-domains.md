@@ -5,10 +5,14 @@
 Never make a real credit card charge in production merely to test whether Stripe Hosted Checkout is reachable. Instead, run a disposable zero-charge Checkout Session canary:
 
 ```bash
+# 1. Preview the canary plan and inspect plan_sha256 (writes_sent: 0)
 legends-stripe checkout-canary --amount-cents 100 --currency usd
+
+# 2. Execute the disposable canary with explicit confirmation
+legends-stripe checkout-canary --amount-cents 100 --currency usd --apply --confirm-plan <plan_sha256>
 ```
 
-`checkout-canary` performs three steps:
+When applied with `--apply --confirm-plan <plan_sha256>`, `checkout-canary` performs three steps:
 1. Creates a Checkout Session (`POST /v1/checkout/sessions`) with `status: "open"`.
 2. Reads back the session (`GET /v1/checkout/sessions/<id>`) to confirm that a hosted `url` was provisioned and `livemode` matches the key mode.
 3. Immediately expires the session (`POST /v1/checkout/sessions/<id>/expire`) and verifies `expired_status == "expired"` (`cleaned_up: true`).
