@@ -2,7 +2,7 @@
   "id": "legends-stripe",
   "name": "Legends Stripe",
   "repo": "avalonreset/legends-stripe",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "summary": "Operate Stripe payment infrastructure, catalog governance, price ladders, .env price auditing, B2B Hosted Invoicing, treasury telemetry, and webhook fortification.",
   "domains": [
     "payments",

@@ -1,6 +1,6 @@
 """legends-stripe: portable Stripe payments, catalog governance, B2B invoicing, treasury telemetry, and webhook fortification CLI."""
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 from .api import StripeClient, StripeError, classify_key, classify_stripe_key, load_dotenv_file, scrub_secrets
 from .blueprints import get_blueprint, list_blueprints

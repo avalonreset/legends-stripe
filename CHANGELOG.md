@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 (2026-11-21)
+
+- Added outlined Legends Font SVG architecture cards (`assets/cards/r1/`) and `scripts/render_cards.py` covering agent handoff, three-pillar B2B invoicing and catalog governance overview, plain-english operator execution chains, two-chamber preview-first plan lock and live audit architecture, and ad-hoc script comparison matrix.
+- Reorganized `README.md` to the evergreen CTO Legends architecture and collapsible reference standard while preserving `setup.py` and `MANIFEST.in` wheel mirroring for `.svg` card assets.
+- Bumped package and attachable knowledge pack version to `0.1.4`.
+
 ## 0.1.3 (2026-11-11)
 
 - Added first-class B2B Hosted Invoicing lifecycle commands (`invoice-radar`, `invoice-create`, `invoice-void`) and Python exports (`scan_invoice_radar`, `create_b2b_invoice`, `void_b2b_invoice`, `validate_invoice_custom_fields`, `validate_b2b_invoice_fields`).
