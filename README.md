@@ -6,6 +6,7 @@
 [![release](https://img.shields.io/github/v/release/avalonreset/legends-stripe?label=release&sort=date&style=flat-square&labelColor=000000&color=ff0000)](https://github.com/avalonreset/legends-stripe/releases/latest)
 [![checks](https://img.shields.io/github/actions/workflow/status/avalonreset/legends-stripe/checks.yml?branch=main&label=checks&style=flat-square&labelColor=000000)](https://github.com/avalonreset/legends-stripe/actions/workflows/checks.yml)
 [![license](https://img.shields.io/github/license/avalonreset/legends-stripe?label=license&style=flat-square&labelColor=000000&color=666666)](LICENSE)
+[![github list: 22 repos](https://img.shields.io/badge/github_list-22_repos-ff0000?style=flat-square&labelColor=000000)](https://github.com/stars/avalonreset/lists/cto-legends)
 
 **Stripe CLI, Stripe Checkout, Stripe Billing, B2B Hosted Invoicing, webhook signature verification, and treasury fee telemetry from Python or your terminal.**
 `legends-stripe` connects scripts, applications, and coding agents to the Stripe API (`v1`) with offline request previews, SHA-256 mutation locks, `.env` price-ID drift detection, Stripe fee calculator telemetry, subscription dunning diagnostics, B2B Hosted Invoice governance, and drop-in Astro, Node, and Python server blueprints.
@@ -155,8 +156,10 @@ MIT License. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
 
 ---
 
+<p align="center"><a href="https://github.com/stars/avalonreset/lists/cto-legends"><img src="assets/collection-star-shrine.svg" width="100%" alt="GitHub Star List: The complete cto-legends collection on one page. Bookmark or star the router and every module from a single GitHub list."></a></p>
+
 **Specification & benchmarks on cto-legends.com:**
 - **Module specification & architecture matrix:** [cto-legends.com/modules/legends-stripe](https://cto-legends.com/modules/legends-stripe)
 - **Related engineering dispatches:** [Fractional CTO Advisory: Technical Due Diligence Guide](https://cto-legends.com/blog?post=fractional-cto-technical-due-diligence-guide) · [How to Build AI Agents: Production CLI & MCP Routing](https://cto-legends.com/blog?post=how-to-build-ai-agents-cli-mcp-routing) · [Claude Code Skills: MCP vs CLI Workflow Architecture](https://cto-legends.com/blog?post=claude-code-skills-mcp-vs-cli-workflow)
-- **Ecosystem hub:** [cto-legends.com/home](https://cto-legends.com/home)
+- **Ecosystem hub & 22-repo GitHub list:** [cto-legends.com/home](https://cto-legends.com/home) · [github.com/stars/avalonreset/lists/cto-legends](https://github.com/stars/avalonreset/lists/cto-legends) (browse or star all 22 repositories from one page)
 
