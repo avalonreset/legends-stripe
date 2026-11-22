@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5 (2026-11-22)
+
+- Sync vendored `cto-legends` router skill pin (`69ddc4f68faa`), enforce LF line endings via `.gitattributes`, and standardize release artifact checksums.
+
 ## 0.1.4 (2026-11-21)
 
 - Added outlined Legends Font SVG architecture cards (`assets/cards/r1/`) and `scripts/render_cards.py` covering agent handoff, three-pillar B2B invoicing and catalog governance overview, plain-english operator execution chains, two-chamber preview-first plan lock and live audit architecture, and ad-hoc script comparison matrix.
