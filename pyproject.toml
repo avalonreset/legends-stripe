@@ -35,7 +35,8 @@ classifiers = [
 legends-stripe = "legends_stripe.cli:main"
 
 [project.urls]
-Homepage = "https://cto-legends.com"
+Homepage = "https://cto-legends.com/modules/legends-stripe"
+Documentation = "https://cto-legends.com/modules/legends-stripe"
 Repository = "https://github.com/avalonreset/legends-stripe"
 Issues = "https://github.com/avalonreset/legends-stripe/issues"
 Changelog = "https://github.com/avalonreset/legends-stripe/blob/main/CHANGELOG.md"
